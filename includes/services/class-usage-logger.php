@@ -12,9 +12,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class AICS_Usage_Logger {
 	public const RETENTION_DAYS = 30;
 	private const EVENTS = array( 'ai_request', 'post_creation', 'system_test' );
-	private const OPERATIONS = array( 'openai_connection_test', 'generate_blog_ideas', 'generate_article_draft', 'create_wordpress_draft' );
+	private const OPERATIONS = array( 'openai_connection_test', 'generate_blog_ideas', 'evaluate_content_ideas', 'generate_article_draft', 'create_wordpress_draft' );
 	private const STATUSES = array( 'success', 'failed' );
-	private const METADATA_KEYS = array( 'idea_count', 'source', 'requested_length', 'tone', 'post_status', 'test_type' );
+	private const METADATA_KEYS = array( 'idea_count', 'evaluated_count', 'eligible_count', 'source', 'requested_length', 'tone', 'post_status', 'test_type' );
 
 	public static function log( array $entry ): bool {
 		try {
@@ -30,7 +30,7 @@ final class AICS_Usage_Logger {
 			if ( isset( $entry['metadata'] ) && is_array( $entry['metadata'] ) ) {
 				foreach ( self::METADATA_KEYS as $key ) {
 					if ( array_key_exists( $key, $entry['metadata'] ) && is_scalar( $entry['metadata'][ $key ] ) ) {
-						$metadata[ $key ] = 'idea_count' === $key ? absint( $entry['metadata'][ $key ] ) : sanitize_key( (string) $entry['metadata'][ $key ] );
+						$metadata[ $key ] = in_array( $key, array( 'idea_count', 'evaluated_count', 'eligible_count' ), true ) ? absint( $entry['metadata'][ $key ] ) : sanitize_key( (string) $entry['metadata'][ $key ] );
 					}
 				}
 			}

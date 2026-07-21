@@ -48,6 +48,7 @@ final class Admin_Menu {
 			array( self::MENU_SLUG, __( 'Dashboard', 'ai-content-studio' ), 'render_dashboard' ),
 			array( 'aics-create-content', __( 'Create Content', 'ai-content-studio' ), 'render_create_content' ),
 			array( 'aics-automations', __( 'Automations', 'ai-content-studio' ), 'render_automations' ),
+			array( 'aics-approvals', __( 'Approvals', 'ai-content-studio' ), 'render_approvals' ),
 			array( 'aics-content-history', __( 'Content History', 'ai-content-studio' ), 'render_content_history' ),
 			array( 'aics-settings', __( 'Settings', 'ai-content-studio' ), 'render_settings' ),
 			array( 'aics-system-status', __( 'System Status', 'ai-content-studio' ), 'render_system_status' ),
@@ -73,6 +74,7 @@ final class Admin_Menu {
 	public function render_content_ideas(): void { $this->render_page( __( 'Content Ideas', 'ai-content-studio' ) ); }
 	public function render_create_content(): void { \AICS_Content_Studio_Page::render(); }
 	public function render_automations(): void { \AICS_Automations_Page::render(); }
+	public function render_approvals(): void { \AICS_Approvals_Page::render(); }
 	public function render_content_history(): void { \AICS_Content_History_Page::render(); }
 	public function render_brand_profile(): void { $this->render_page( __( 'Brand Profile', 'ai-content-studio' ) ); }
 	public function render_settings(): void { \AICS_Settings_Page::render(); }

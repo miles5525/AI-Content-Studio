@@ -55,6 +55,7 @@ final class AICS_Dashboard_Page {
 		$operations = array(
 			'openai_connection_test'  => __( 'OpenAI Connection Test', 'ai-content-studio' ),
 			'generate_blog_ideas'      => __( 'Blog Ideas Generated', 'ai-content-studio' ),
+			'evaluate_content_ideas'   => __( 'Idea Evaluation', 'ai-content-studio' ),
 			'generate_article_draft'   => __( 'Article Draft Generated', 'ai-content-studio' ),
 			'create_wordpress_draft'   => __( 'WordPress Draft Created', 'ai-content-studio' ),
 		);

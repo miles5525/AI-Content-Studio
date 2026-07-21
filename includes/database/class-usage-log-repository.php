@@ -27,9 +27,9 @@ final class AICS_Usage_Log_Repository {
 		global $wpdb;
 		$table = $wpdb->prefix . 'aics_usage_logs';
 		$sql   = "SELECT
-			SUM(CASE WHEN operation IN ('generate_blog_ideas','generate_article_draft') THEN 1 ELSE 0 END) total_ai_requests,
-			SUM(CASE WHEN operation IN ('generate_blog_ideas','generate_article_draft') AND status = 'success' THEN 1 ELSE 0 END) successful_ai_requests,
-			SUM(CASE WHEN operation IN ('generate_blog_ideas','generate_article_draft') AND status = 'failed' THEN 1 ELSE 0 END) failed_ai_requests,
+			SUM(CASE WHEN operation IN ('generate_blog_ideas','evaluate_content_ideas','generate_article_draft') THEN 1 ELSE 0 END) total_ai_requests,
+			SUM(CASE WHEN operation IN ('generate_blog_ideas','evaluate_content_ideas','generate_article_draft') AND status = 'success' THEN 1 ELSE 0 END) successful_ai_requests,
+			SUM(CASE WHEN operation IN ('generate_blog_ideas','evaluate_content_ideas','generate_article_draft') AND status = 'failed' THEN 1 ELSE 0 END) failed_ai_requests,
 			SUM(CASE WHEN operation = 'generate_article_draft' AND status = 'success' THEN 1 ELSE 0 END) articles_generated,
 			SUM(CASE WHEN operation = 'create_wordpress_draft' AND status = 'success' THEN 1 ELSE 0 END) drafts_created
 			FROM {$table}";

@@ -35,6 +35,7 @@ final class Assets {
 			'toplevel_page_ai-content-studio',
 			'ai-content-studio_page_aics-create-content',
 			'ai-content-studio_page_aics-automations',
+			'ai-content-studio_page_aics-approvals',
 			'ai-content-studio_page_aics-content-history',
 			'ai-content-studio_page_aics-settings',
 			'ai-content-studio_page_aics-system-status',

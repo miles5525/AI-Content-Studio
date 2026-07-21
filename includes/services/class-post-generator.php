@@ -48,6 +48,38 @@ final class AICS_Post_Generator {
 	}
 
 	/**
+	 * Strictly validates automation output before persistent storage.
+	 *
+	 * @param array<string,mixed> $article Generated structured data.
+	 * @return array{title:string,content:string,excerpt:string}|WP_Error
+	 */
+	public function validate_and_prepare_article( array $article ) {
+		$content = $article['content'] ?? null;
+		if ( ! is_string( $content ) ) {
+			return new WP_Error( 'invalid_article_structure', __( 'The generated article structure is invalid.', 'ai-content-studio' ) );
+		}
+
+		$unsafe_patterns = array(
+			'/<(script|style|iframe|form|input|embed|svg)\b/i',
+			'/\son[a-z]+\s*=/i',
+			'/\sstyle\s*=/i',
+			'/\b(?:javascript|data)\s*:/i',
+			'/\[(?:insert|add|replace|write)[^\]]*\]/i',
+			'/\bTODO\b/i',
+			'/\blorem ipsum\b/i',
+			'/\b(?:model|provider) error\b/i',
+			'/^\s*\{\s*"article"\s*:/i',
+		);
+		foreach ( $unsafe_patterns as $pattern ) {
+			if ( preg_match( $pattern, $content ) ) {
+				return new WP_Error( 'unsafe_article_content', __( 'The generated article contains unsafe or incomplete content.', 'ai-content-studio' ) );
+			}
+		}
+
+		return $this->prepare_generated_article( $article );
+	}
+
+	/**
 	 * Validates manually edited article fields.
 	 *
 	 * @param mixed $title   Edited title.

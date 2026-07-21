@@ -64,6 +64,34 @@ final class AICS_AI_Engine {
 		catch ( InvalidArgumentException $exception ) { return AICS_AI_Response::failure( 'invalid-automation-profile', __( 'The automation profile is invalid.', 'ai-content-studio' ) ); }
 		return $this->provider->generate( $request );
 	}
+	public function evaluate_automation_ideas(array $business_context,array $content_settings,array $candidates):AICS_AI_Response{try{$request=$this->prompt_engine->create_automation_idea_evaluation_request($business_context,$content_settings,$candidates);}catch(InvalidArgumentException $exception){return AICS_AI_Response::failure('invalid-evaluation-input','The evaluation input is invalid.');}return $this->provider->generate($request);}
+
+	/** Generates one validated, sanitized persistent automation article. */
+	public function generate_automation_article( array $business_context, array $content_settings, array $idea ): AICS_AI_Response {
+		try {
+			$request = $this->prompt_engine->create_automation_article_request( $business_context, $content_settings, $idea );
+		} catch ( InvalidArgumentException $exception ) {
+			return AICS_AI_Response::failure( 'invalid-automation-article-input', __( 'The automation article input is invalid.', 'ai-content-studio' ) );
+		}
+		$response = $this->provider->generate( $request );
+		if ( ! $response->is_success() ) {
+			return $response;
+		}
+		$data = $response->get_data();
+		if ( ! is_array( $data ) || ! isset( $data['article'] ) || ! is_array( $data['article'] ) ) {
+			return AICS_AI_Response::failure( 'missing-article-object', __( 'The generated article structure is invalid.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+		}
+		foreach ( array( 'title', 'excerpt', 'content' ) as $field ) {
+			if ( ! array_key_exists( $field, $data['article'] ) || ! is_string( $data['article'][ $field ] ) ) {
+				return AICS_AI_Response::failure( 'invalid-article-structure', __( 'The generated article structure is invalid.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+			}
+		}
+		$article = $this->post_generator->validate_and_prepare_article( $data['article'] );
+		if ( is_wp_error( $article ) ) {
+			return AICS_AI_Response::failure( $article->get_error_code(), __( 'The generated article did not pass validation.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+		}
+		return AICS_AI_Response::success( array( 'article' => $article ), __( 'Automation article generated successfully.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+	}
 
 	/**
 	 * Generates and validates a complete structured article draft.

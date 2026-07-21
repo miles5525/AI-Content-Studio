@@ -184,6 +184,23 @@
 .aics-upcoming-runs code { display: block; margin-top: 4px; color: var(--aics-text-muted); font-size: 11px; }
 .aics-monthly-day-field > .aics-field { height: 100%; }
 
+.aics-approval-tabs { display: flex; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid var(--aics-border); }
+.aics-approval-tabs a { padding: 10px 14px; text-decoration: none; font-weight: 600; }
+.aics-approval-tabs a.current { border-bottom: 3px solid var(--aics-primary); color: var(--aics-primary-hover); }
+.aics-table-wrap { max-width: 100%; overflow-x: auto; }
+.aics-approval-table { min-width: 920px; }
+.aics-approval-table td { vertical-align: top; }
+.aics-approval-review { max-width: 980px; }
+.aics-review-details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 18px; }
+.aics-review-details > div { padding: 12px; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: var(--aics-surface-muted); }
+.aics-review-details dt { font-weight: 600; }
+.aics-review-details dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.aics-article-preview { max-width: 100%; margin: 20px 0; padding: 20px; overflow-wrap: anywhere; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: #fff; }
+.aics-article-preview img, .aics-article-preview table { max-width: 100%; }
+.aics-decision-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 18px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--aics-border); }
+.aics-decision-grid form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.aics-decision-grid label { width: 100%; font-weight: 600; }
+
 @media screen and (max-width: 1024px) {
 	.aics-admin-wrap { max-width: none; }
 	.aics-dashboard-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -200,6 +217,7 @@
 	.aics-automation-summary-grid, .aics-form-grid { grid-template-columns: 1fr; }
 	.aics-schedule-details { grid-template-columns: 1fr; }
 	.aics-field--full { grid-column: auto; }
+	.aics-review-details, .aics-decision-grid { grid-template-columns: 1fr; }
 }
 @media screen and (max-width: 480px) {
 	.aics-idea-grid { grid-template-columns: minmax(0, 1fr); }

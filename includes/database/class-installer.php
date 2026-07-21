@@ -51,6 +51,7 @@ final class Installer {
 		$profiles_table  = $wpdb->prefix . 'aics_automation_profiles';
 		$runs_table      = $wpdb->prefix . 'aics_automation_runs';
 		$ideas_table     = $wpdb->prefix . 'aics_content_ideas';
+		$articles_table  = $wpdb->prefix . 'aics_articles';
 		$charset_collate = $wpdb->get_charset_collate();
 		$usage_sql       = "CREATE TABLE {$usage_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -149,6 +150,7 @@ final class Installer {
 			score decimal(5,2) NOT NULL DEFAULT 0.00,
 			status varchar(30) NOT NULL DEFAULT 'generated',
 			priority smallint(5) unsigned NOT NULL DEFAULT 0,
+			evaluated_at datetime NULL,
 			planned_publish_at datetime NULL,
 			approved_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			approved_at datetime NULL,
@@ -170,10 +172,56 @@ final class Installer {
 			KEY content_fingerprint (content_fingerprint),
 			KEY normalized_keyword (normalized_keyword),
 			KEY planned_publish_at (planned_publish_at),
+			KEY evaluated_at (evaluated_at),
 			KEY approved_by (approved_by),
 			KEY created_at (created_at),
 			KEY updated_at (updated_at),
 			KEY normalized_title (normalized_title(191))
+		) {$charset_collate};";
+		$articles_sql    = "CREATE TABLE {$articles_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			article_uuid char(36) NOT NULL,
+			idea_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			run_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			source_type varchar(20) NOT NULL DEFAULT 'automation',
+			title varchar(250) NOT NULL DEFAULT '',
+			excerpt text NULL,
+			content longtext NULL,
+			content_hash char(64) NOT NULL DEFAULT '',
+			word_count int(10) unsigned NOT NULL DEFAULT 0,
+			status varchar(30) NOT NULL DEFAULT 'queued',
+			planned_publish_at datetime NULL,
+			wordpress_post_id bigint(20) unsigned NULL,
+			generation_attempts smallint(5) unsigned NOT NULL DEFAULT 0,
+			last_generation_at datetime NULL,
+			generated_at datetime NULL,
+			approved_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			approved_at datetime NULL,
+			rejected_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			rejected_at datetime NULL,
+			rejection_code varchar(100) NOT NULL DEFAULT '',
+			post_created_at datetime NULL,
+			scheduled_at datetime NULL,
+			published_at datetime NULL,
+			last_error_code varchar(100) NOT NULL DEFAULT '',
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			updated_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY article_uuid (article_uuid),
+			UNIQUE KEY idea_id (idea_id),
+			UNIQUE KEY wordpress_post_id (wordpress_post_id),
+			KEY profile_id (profile_id),
+			KEY run_id (run_id),
+			KEY source_type (source_type),
+			KEY status (status),
+			KEY planned_publish_at (planned_publish_at),
+			KEY generated_at (generated_at),
+			KEY approved_by (approved_by),
+			KEY created_at (created_at),
+			KEY updated_at (updated_at)
 		) {$charset_collate};";
 
 		$wpdb->last_error = '';
@@ -188,13 +236,17 @@ final class Installer {
 		$wpdb->last_error = '';
 		dbDelta( $ideas_sql );
 		$ideas_error = $wpdb->last_error;
+		$wpdb->last_error = '';
+		dbDelta( $articles_sql );
+		$articles_error = $wpdb->last_error;
 
 		$usage_exists    = $usage_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $usage_table ) ) );
 		$profiles_exists = $profiles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $profiles_table ) ) );
 		$runs_exists     = $runs_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $runs_table ) ) );
 		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
+		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && $usage_exists && $profiles_exists && $runs_exists && $ideas_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && $usage_exists && $profiles_exists && $runs_exists && $ideas_exists && $articles_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}
