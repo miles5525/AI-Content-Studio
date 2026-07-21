@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 through 4 are complete. The plugin now includes:
+Tasks 1 through 5 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -363,13 +363,32 @@ The form uses a dedicated `admin-post.php` action with centralized capability en
 
 Each user's latest valid form state is stored for 20 minutes in an `aics_content_inputs_{user_id}` transient. A separate five-minute user-scoped validation transient preserves sanitized text after a failed submission without overwriting the last valid state. No sessions, API keys, secrets, or permanent plugin settings are used for Content Studio state.
 
+Task 5 added secure AI-powered blog-idea generation and selection:
+
+* `includes/ai/class-ai-request.php` defines an immutable provider-independent request containing the task, instructions, user prompt, output-token limit, and structured schema.
+* `includes/ai/class-ai-response.php` defines a predictable success or failure result with validated data, a safe public message, a controlled error code, provider name, and optional HTTP status.
+* `includes/ai/class-prompt-engine.php` builds the `blog_ideas` request and exact five-idea JSON schema from validated Content Studio inputs.
+* `includes/ai/class-ai-engine.php` orchestrates prompt creation, provider generation, and generated-output validation.
+* `includes/providers/interface-provider.php` now requires `generate( AICS_AI_Request $request ): AICS_AI_Response` while preserving connection testing.
+* `includes/providers/class-openai-provider.php` converts provider-independent requests to Responses API requests and defensively extracts structured output.
+* `includes/admin/class-content-studio-page.php` adds protected idea-generation and idea-selection actions plus five escaped idea cards.
+* `ai-content-studio.php` loads the new AI classes in dependency order.
+* `assets/css/admin.css` and `assets/js/admin.js` add scoped idea-card styling and double-submission prevention.
+* `AI_CONTEXT.md` documents the completed task.
+
+The OpenAI request uses the existing Responses API endpoint, saved allowlisted model, reusable HTTP client, `store: false`, and strict structured output through `text.format`. The prompt requires exactly five objects, and the schema requires each object to contain `id`, `title`, `description`, `primary_keyword`, and `search_intent`; exact cardinality is enforced again by the AI engine before storage. The provider handles nested output text, incomplete output, missing output, invalid JSON, and accidental outer Markdown fences without exposing raw responses.
+
+The AI engine requires IDs `idea-1` through `idea-5`, exactly five items, unique IDs and titles, plain non-empty text, allowlisted search intent, and length limits of 200 characters for title and primary keyword and 600 characters for description. It sanitizes every generated field and rejects the entire result rather than storing partial output.
+
+Generated ideas are stored for 20 minutes in `aics_blog_ideas_{user_id}` only after complete validation. New generation replaces old ideas only after success and clears the prior selection. Selection submits only a stored idea ID, reloads the server-side idea list, and copies the matching idea into `aics_selected_blog_idea_{user_id}` for 20 minutes. No API key, authorization header, raw response, or complete prompt is stored in idea state.
+
 ## Current Task Boundary
 
-Task 4 adds only Content Studio form rendering, server-side validation, controlled notices, and temporary per-user state. It adds no blog ideas, OpenAI calls, AI or prompt engine, request or response value objects, article generation, post creation or editor integration, usage or prompt logging, custom database tables, REST or AJAX endpoints, streaming, background processing, image or SEO generation, content history, social features, or auto-publishing.
+Task 5 adds only structured blog-idea generation, validation, temporary display, and selection. It adds no full article generation, article editor, post creation, publishing, SEO metadata, images, social content, usage or content-history tables, streaming, AJAX, REST endpoints, background jobs, editable prompt templates, additional providers, model discovery, API-key encryption, or raw prompt logging.
 
-Current limitations: validated Content Studio inputs expire after 20 minutes and are not yet consumed by an AI workflow. The API key remains unencrypted in WordPress option storage, model availability is not discovered dynamically, and the connection test is synchronous.
+Current limitations: validated inputs, generated ideas, and selected ideas expire after 20 minutes. Generation is synchronous and depends on the selected account-accessible model returning a conforming structured response. The API key remains unencrypted in WordPress option storage, and no article-generation workflow exists.
 
-The next planned task is blog-idea generation architecture using the saved Content Studio inputs. It has not begun.
+The next planned task is generating a complete editable article draft from the selected idea. It has not begun.
 
 ## Important Instruction for Codex
 

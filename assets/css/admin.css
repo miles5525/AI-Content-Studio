@@ -75,3 +75,57 @@
 .aics-required {
 	color: #d63638;
 }
+
+.aics-blog-ideas-section {
+	max-width: 900px;
+	margin-top: 24px;
+	padding: 20px 24px;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+}
+
+.aics-blog-ideas-section h2 {
+	margin-top: 0;
+}
+
+.aics-generate-ideas-form {
+	margin: 16px 0;
+}
+
+.aics-idea-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.aics-idea-card {
+	padding: 18px;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #f6f7f7;
+}
+
+.aics-idea-card--selected {
+	border-color: #2271b1;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+.aics-idea-card h3 {
+	margin-top: 0;
+}
+
+.aics-idea-meta dt {
+	font-weight: 600;
+}
+
+.aics-idea-meta dd {
+	margin: 0 0 10px;
+}
+
+.aics-selected-idea-message {
+	margin-top: 18px;
+	padding: 10px 12px;
+	border-left: 4px solid #2271b1;
+	background: #f0f6fc;
+}

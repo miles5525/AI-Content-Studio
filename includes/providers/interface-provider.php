@@ -26,4 +26,12 @@ interface AICS_Provider_Interface {
 	 * @return array{success: bool, code: string, message: string}
 	 */
 	public function test_connection(): array;
+
+	/**
+	 * Generates a provider response for a provider-independent request.
+	 *
+	 * @param AICS_AI_Request $request Validated AI request.
+	 * @return AICS_AI_Response
+	 */
+	public function generate( AICS_AI_Request $request ): AICS_AI_Response;
 }
