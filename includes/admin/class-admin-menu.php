@@ -66,10 +66,10 @@ final class Admin_Menu {
 		}
 	}
 
-	public function render_dashboard(): void { $this->render_page( __( 'Dashboard', 'ai-content-studio' ) ); }
+	public function render_dashboard(): void { \AICS_Dashboard_Page::render(); }
 	public function render_content_ideas(): void { $this->render_page( __( 'Content Ideas', 'ai-content-studio' ) ); }
 	public function render_create_content(): void { \AICS_Content_Studio_Page::render(); }
-	public function render_content_history(): void { $this->render_page( __( 'Content History', 'ai-content-studio' ) ); }
+	public function render_content_history(): void { \AICS_Content_History_Page::render(); }
 	public function render_brand_profile(): void { $this->render_page( __( 'Brand Profile', 'ai-content-studio' ) ); }
 	public function render_settings(): void { \AICS_Settings_Page::render(); }
 	public function render_system_status(): void { $this->render_page( __( 'System Status', 'ai-content-studio' ) ); }

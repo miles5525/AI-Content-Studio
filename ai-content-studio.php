@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.1.0' );
-define( 'AICS_DB_VERSION', '0.1.0' );
+define( 'AICS_DB_VERSION', '0.2.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );
@@ -29,7 +29,9 @@ define( 'AICS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 require_once AICS_PLUGIN_DIR . 'includes/core/class-permissions.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-installer.php';
+require_once AICS_PLUGIN_DIR . 'includes/database/class-usage-log-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-settings.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-usage-logger.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-http-client.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-ai-request.php';
@@ -44,6 +46,8 @@ require_once AICS_PLUGIN_DIR . 'includes/admin/class-admin-menu.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-assets.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-settings-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-content-studio-page.php';
+require_once AICS_PLUGIN_DIR . 'includes/admin/class-content-history-page.php';
+require_once AICS_PLUGIN_DIR . 'includes/admin/class-dashboard-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/core/class-plugin.php';
 
 register_activation_hook( __FILE__, array( 'AIContentStudio\\Core\\Activator', 'activate' ) );

@@ -142,8 +142,21 @@ final class AICS_Settings_Page {
 		self::require_permission();
 		check_admin_referer( self::TEST_ACTION, 'aics_test_connection_nonce' );
 
-		$provider = new AICS_OpenAI_Provider();
-		$result   = $provider->test_connection();
+		$provider   = new AICS_OpenAI_Provider();
+		$started_at = microtime( true );
+		$result     = $provider->test_connection();
+		AICS_Usage_Logger::log(
+			array(
+				'event_type'  => 'system_test',
+				'operation'   => 'openai_connection_test',
+				'status'      => $result['success'] ? 'success' : 'failed',
+				'provider'    => 'openai',
+				'model'       => AICS_Settings::get_openai_model(),
+				'error_code'  => $result['success'] ? '' : $result['code'],
+				'duration_ms' => AICS_Usage_Logger::duration_ms( $started_at ),
+				'metadata'    => array( 'test_type' => 'provider_connection' ),
+			)
+		);
 
 		self::redirect( $result['code'] );
 	}

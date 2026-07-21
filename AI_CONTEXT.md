@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 through 7 are complete. The plugin now includes:
+Tasks 1 through 9 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -426,13 +426,57 @@ Created posts receive these sanitized private metadata fields:
 
 No API key, authorization header, business context, full prompt, or raw provider response is stored in post meta. Optional metadata failure does not delete a successfully created post; the post ID remains in workflow state and a controlled warning is shown. Edit links are rendered only after `current_user_can( 'edit_post', $post_id )` succeeds.
 
+Task 8 added a secure workflow reset and native WordPress Content History:
+
+* `includes/admin/class-content-history-page.php` provides the protected Content History query, filters, table, metadata normalization, actions, empty state, and pagination.
+* `includes/admin/class-content-studio-page.php` registers `aics_reset_content_workflow`, renders Start New Content when temporary state exists, and deletes only the current user's five workflow transients after capability, login, and nonce checks.
+* `includes/admin/class-admin-menu.php` replaces the Content History placeholder with the dedicated page renderer.
+* `ai-content-studio.php` loads the new history page class.
+* `assets/css/admin.css` adds scoped reset and responsive history-table styling.
+* `AI_CONTEXT.md` documents the completed task.
+
+No `AICS_Workflow_State` service was introduced. All temporary state keys and their existing expiration behavior remain centralized in `AICS_Content_Studio_Page`, so extracting a service would have added indirection without reducing cross-class duplication.
+
+Start New Content clears only these current-user transients:
+
+* `aics_content_inputs_{user_id}`
+* `aics_content_input_errors_{user_id}`
+* `aics_blog_ideas_{user_id}`
+* `aics_selected_blog_idea_{user_id}`
+* `aics_article_draft_{user_id}`, including its created-post association
+
+Reset never deletes or modifies WordPress posts or post metadata, never changes `aics_settings`, never affects another user's transient keys, and never calls an AI provider. It uses the existing generic confirmation JavaScript, while the server remains authoritative.
+
+Content History queries native `post` records through `WP_Query`, requiring `_aics_generated_post = 1`, ordering newest first, and displaying 10 items per page. The default `all` filter includes draft, pending, future, publish, and private posts but excludes Trash. Allowlisted filters are `all`, `draft`, `publish`, `future`, and `pending`; invalid values fall back to `all`, and page numbers below 1 fall back to 1. Pagination preserves only the controlled page and status values.
+
+The history page requires the centralized plugin capability. The native query requests readable posts, each row is also checked with `read_post` or `edit_post`, edit links require `edit_post`, and View appears only for publicly viewable posts the user can read. Private metadata is normalized and escaped; known tone, length, search-intent, and status values use translated allowlisted labels, while missing or unknown values display an em dash.
+
+Task 9 added lightweight usage logging and a functional dashboard:
+
+* `includes/database/class-usage-log-repository.php` owns inserts, aggregate summary queries, bounded recent-activity reads, and retention deletion.
+* `includes/services/class-usage-logger.php` validates strict event/operation/status allowlists, sanitizes scalar fields, accepts only five safe metadata keys, measures durations, and performs cleanup without affecting primary operations.
+* `includes/admin/class-dashboard-page.php` renders five summary cards, the latest 10 activity records, capability-checked related-post links, safe user labels, duration/date formatting, an empty state, and quick links.
+* `includes/database/class-installer.php` creates or upgrades the usage table through `dbDelta()` and updates the installed schema version only after a successful schema operation.
+* `includes/core/class-plugin.php`, `class-activator.php`, and `class-deactivator.php` provide runtime schema upgrade and daily retention-cron lifecycle handling.
+* `includes/admin/class-settings-page.php` logs one final OpenAI connection-test outcome.
+* `includes/admin/class-content-studio-page.php` logs one final outcome for blog-idea generation, article generation, and WordPress draft creation.
+* `includes/admin/class-admin-menu.php`, `ai-content-studio.php`, and `assets/css/admin.css` load and display the dashboard at the existing `ai-content-studio` top-level URL.
+
+The schema version is `0.2.0`. The table is `{$wpdb->prefix}aics_usage_logs` with `id`, `user_id`, `event_type`, `operation`, `status`, `provider`, `model`, `error_code`, `object_id`, `duration_ms`, `metadata`, and UTC `created_at` columns. It has indexes for user, event type, operation, status, creation time, and object ID. Fresh activation installs it; existing installations run the narrow version comparison on `init`, and matching installations skip `dbDelta()`.
+
+Logged operations are `openai_connection_test`, `generate_blog_ideas`, `generate_article_draft`, and `create_wordpress_draft`. Allowed event types are `system_test`, `ai_request`, and `post_creation`; statuses are `success` and `failed`. Safe metadata is limited to `idea_count`, `requested_length`, `tone`, `post_status`, and `test_type`. API keys, authorization headers, prompts, business context, topics, titles, article content, excerpts, provider responses, raw error messages, emails, and IP addresses are never accepted as metadata.
+
+Dashboard totals are calculated with aggregate SQL rather than loading logs: AI requests count idea and article operations; successful/failed AI requests apply their corresponding status; articles count successful article generation; WordPress drafts count successful draft creation. Recent activity is limited to 10 newest rows and maps every displayed operation and status through controlled labels.
+
+Logs are retained for 30 days through `aics_cleanup_usage_logs`. Activation schedules one daily event, runtime startup restores a missing schedule without duplicating it, deactivation clears the event without deleting logs, and cleanup deletes only rows older than the UTC cutoff. Uninstall remains non-destructive because the established uninstall policy defers cleanup until final data-storage decisions are made.
+
 ## Current Task Boundary
 
-Task 7 adds only creation of a standard WordPress draft post from the reviewed temporary article, its minimal private association metadata, duplicate prevention, and edit/view links. It adds no publishing, scheduling, categories, tags, featured images, SEO metadata, post updates, synchronization, content-history tables, usage tables, custom post types, REST or AJAX endpoints, background processing, or provider changes.
+Task 9 adds only operation-level usage records, aggregate dashboard summaries, recent activity, and 30-day retention. It adds no token accounting, cost calculation, billing, limits, charts, exports, log filters, log deletion UI, content/prompt logging, external analytics, REST/AJAX endpoints, or additional providers.
 
-Current limitations: the created WordPress post is independent after insertion; later temporary edits do not update it. Workflow associations expire with the 45-minute article transient. If the association expires, the plugin cannot use workflow state to prevent intentional creation from a newly generated workflow. Draft creation is synchronous and supports only the standard `post` post type.
+Current limitations: logging is best effort and deliberately contains no exact token or cost data. Dashboard summaries are lifetime totals within the retention window, and there is no reporting filter or chart. Deactivation preserves the table and logs; uninstall also preserves them under the current policy.
 
-The next planned task is workflow reset and the content-history foundation. It has not begun.
+The next planned task is system status, final UX polish, and release-readiness checks. It has not begun.
 
 ## Important Instruction for Codex
 

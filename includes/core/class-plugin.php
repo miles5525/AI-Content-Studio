@@ -45,6 +45,12 @@ final class Plugin {
 	 */
 	public function run(): void {
 		add_action( 'init', array( $this, 'load_textdomain' ) );
+		add_action( 'init', array( 'AIContentStudio\\Database\\Installer', 'maybe_upgrade' ) );
+		add_action( 'aics_cleanup_usage_logs', array( 'AICS_Usage_Logger', 'cleanup' ) );
+
+		if ( ! wp_next_scheduled( 'aics_cleanup_usage_logs' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'aics_cleanup_usage_logs' );
+		}
 
 		if ( is_admin() ) {
 			( new Admin_Menu() )->register();

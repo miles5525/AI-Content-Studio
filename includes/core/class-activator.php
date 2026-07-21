@@ -25,6 +25,10 @@ final class Activator {
 	public static function activate(): void {
 		self::check_requirements();
 		Installer::install();
+
+		if ( ! wp_next_scheduled( 'aics_cleanup_usage_logs' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'aics_cleanup_usage_logs' );
+		}
 	}
 
 	/**

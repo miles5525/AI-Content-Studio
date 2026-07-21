@@ -26,6 +26,8 @@ final class AICS_Content_Studio_Page {
 	private const SAVE_ARTICLE_NONCE_NAME = 'aics_save_article_nonce';
 	private const CREATE_DRAFT_ACTION = 'aics_create_wordpress_draft';
 	private const CREATE_DRAFT_NONCE_NAME = 'aics_create_wordpress_draft_nonce';
+	private const RESET_ACTION = 'aics_reset_content_workflow';
+	private const RESET_NONCE_NAME = 'aics_reset_content_workflow_nonce';
 	private const STATE_TTL = 20 * MINUTE_IN_SECONDS;
 	private const ERROR_STATE_TTL = 5 * MINUTE_IN_SECONDS;
 	private const ARTICLE_STATE_TTL = 45 * MINUTE_IN_SECONDS;
@@ -56,6 +58,7 @@ final class AICS_Content_Studio_Page {
 		add_action( 'admin_post_' . self::GENERATE_ARTICLE_ACTION, array( self::class, 'handle_generate_article' ) );
 		add_action( 'admin_post_' . self::SAVE_ARTICLE_ACTION, array( self::class, 'handle_save_article' ) );
 		add_action( 'admin_post_' . self::CREATE_DRAFT_ACTION, array( self::class, 'handle_create_wordpress_draft' ) );
+		add_action( 'admin_post_' . self::RESET_ACTION, array( self::class, 'handle_reset_workflow' ) );
 	}
 
 	/**
@@ -66,6 +69,7 @@ final class AICS_Content_Studio_Page {
 	public static function render(): void {
 		self::require_permission();
 
+		$has_workflow     = self::has_workflow_state();
 		$state            = self::get_form_state();
 		$validated_inputs = self::get_validated_input_state();
 		$idea_state       = self::get_idea_state();
@@ -76,6 +80,14 @@ final class AICS_Content_Studio_Page {
 			<h1><?php esc_html_e( 'AI Content Studio', 'ai-content-studio' ); ?></h1>
 			<p><?php esc_html_e( 'Prepare the business and writing inputs that will be used for AI-assisted blog generation in a future development task.', 'ai-content-studio' ); ?></p>
 			<?php self::render_notice(); ?>
+			<?php if ( $has_workflow ) : ?>
+				<form class="aics-reset-workflow-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-confirm="<?php echo esc_attr__( 'Start a new content workflow? Your current temporary inputs, generated ideas, and article draft will be cleared. Any WordPress draft already created will remain available.', 'ai-content-studio' ); ?>">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::RESET_ACTION ); ?>">
+					<?php wp_nonce_field( self::RESET_ACTION, self::RESET_NONCE_NAME ); ?>
+					<?php submit_button( __( 'Start New Content', 'ai-content-studio' ), 'secondary', 'submit', false ); ?>
+					<span class="description"><?php esc_html_e( 'Existing WordPress posts will not be deleted.', 'ai-content-studio' ); ?></span>
+				</form>
+			<?php endif; ?>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION ); ?>">
@@ -199,18 +211,24 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'inputs-missing' );
 		}
 
-		$engine   = new AICS_AI_Engine();
-		$response = $engine->generate_blog_ideas( $inputs );
+		$engine     = new AICS_AI_Engine();
+		$started_at = microtime( true );
+		$response   = $engine->generate_blog_ideas( $inputs );
+		$duration   = AICS_Usage_Logger::duration_ms( $started_at );
 
 		if ( ! $response->is_success() ) {
+			self::log_usage( 'ai_request', 'generate_blog_ideas', 'failed', $response->get_error_code(), $duration );
 			self::redirect( self::map_generation_notice( $response->get_error_code() ) );
 		}
 
 		$data = $response->get_data();
 
 		if ( null === $data || ! isset( $data['ideas'] ) || ! is_array( $data['ideas'] ) ) {
+			self::log_usage( 'ai_request', 'generate_blog_ideas', 'failed', 'invalid-idea-format', $duration );
 			self::redirect( 'invalid-idea-format' );
 		}
+
+		self::log_usage( 'ai_request', 'generate_blog_ideas', 'success', '', $duration, 0, array( 'idea_count' => count( $data['ideas'] ) ) );
 
 		set_transient(
 			self::get_ideas_state_key(),
@@ -292,18 +310,25 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'selected-idea-missing' );
 		}
 
-		$engine   = new AICS_AI_Engine();
-		$response = $engine->generate_article_draft( $inputs, $selected_idea );
+		$engine     = new AICS_AI_Engine();
+		$started_at = microtime( true );
+		$response   = $engine->generate_article_draft( $inputs, $selected_idea );
+		$duration   = AICS_Usage_Logger::duration_ms( $started_at );
+		$metadata   = array( 'requested_length' => $inputs['article_length'], 'tone' => $inputs['tone'] );
 
 		if ( ! $response->is_success() ) {
+			self::log_usage( 'ai_request', 'generate_article_draft', 'failed', $response->get_error_code(), $duration, 0, $metadata );
 			self::redirect( self::map_article_generation_notice( $response->get_error_code() ) );
 		}
 
 		$article = $response->get_data();
 
 		if ( null === $article ) {
+			self::log_usage( 'ai_request', 'generate_article_draft', 'failed', 'invalid-article-format', $duration, 0, $metadata );
 			self::redirect( 'invalid-article-format' );
 		}
+
+		self::log_usage( 'ai_request', 'generate_article_draft', 'success', '', $duration, 0, $metadata );
 
 		$timestamp = current_time( 'timestamp', true );
 		set_transient( self::get_state_key(), $inputs, self::ARTICLE_STATE_TTL );
@@ -400,10 +425,12 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'associated-draft-missing' );
 		}
 
+		$started_at = microtime( true );
 		$generator = new AICS_Post_Generator();
 		$article   = $generator->prepare_generated_article( $article_draft );
 
 		if ( is_wp_error( $article ) ) {
+			self::log_usage( 'post_creation', 'create_wordpress_draft', 'failed', 'invalid-article-draft', AICS_Usage_Logger::duration_ms( $started_at ) );
 			self::redirect( 'invalid-article-draft' );
 		}
 
@@ -418,16 +445,45 @@ final class AICS_Content_Studio_Page {
 			'generated_at'    => $article_draft['generated_at'],
 		);
 		$result        = $generator->create_wordpress_draft( $article, $context );
+		$duration      = AICS_Usage_Logger::duration_ms( $started_at );
 
 		if ( ! $result['success'] ) {
+			self::log_usage( 'post_creation', 'create_wordpress_draft', 'failed', $result['code'], $duration );
 			self::redirect( in_array( $result['code'], array( 'invalid-article-draft', 'draft-creation-not-allowed' ), true ) ? $result['code'] : 'wordpress-draft-creation-failed' );
 		}
+
+		self::log_usage( 'post_creation', 'create_wordpress_draft', 'success', '', $duration, absint( $result['post_id'] ), array( 'post_status' => 'draft' ) );
 
 		$article_draft['created_post_id'] = absint( $result['post_id'] );
 		$article_draft['created_post_at'] = current_time( 'timestamp', true );
 		set_transient( self::get_article_draft_key(), $article_draft, self::ARTICLE_STATE_TTL );
 
 		self::redirect( 'wordpress-draft-created-meta-warning' === $result['code'] ? $result['code'] : 'wordpress-draft-created' );
+	}
+
+	/**
+	 * Clears only the current user's temporary Content Studio workflow.
+	 *
+	 * @return void
+	 */
+	public static function handle_reset_workflow(): void {
+		if ( ! is_user_logged_in() || ! current_user_can( \AIContentStudio\Core\Permissions::manage() ) ) {
+			self::redirect( 'workflow-reset-not-allowed' );
+		}
+
+		if ( ! self::verify_nonce( self::RESET_NONCE_NAME, self::RESET_ACTION ) ) {
+			self::redirect( 'request-not-verified' );
+		}
+
+		$had_state = self::has_workflow_state();
+
+		delete_transient( self::get_state_key() );
+		delete_transient( self::get_error_state_key() );
+		delete_transient( self::get_ideas_state_key() );
+		delete_transient( self::get_selected_idea_key() );
+		delete_transient( self::get_article_draft_key() );
+
+		self::redirect( $had_state ? 'workflow-reset' : 'workflow-already-empty' );
 	}
 
 	/**
@@ -951,6 +1007,9 @@ final class AICS_Content_Studio_Page {
 			'wordpress-draft-creation-failed' => array( 'error', __( 'WordPress could not create the draft.', 'ai-content-studio' ) ),
 			'draft-creation-not-allowed'  => array( 'error', __( 'You are not allowed to create posts.', 'ai-content-studio' ) ),
 			'associated-draft-missing'    => array( 'warning', __( 'The previously associated draft no longer exists. You can create a new WordPress draft.', 'ai-content-studio' ) ),
+			'workflow-reset'              => array( 'success', __( 'New content workflow started successfully.', 'ai-content-studio' ) ),
+			'workflow-already-empty'      => array( 'info', __( 'The content workflow was already empty.', 'ai-content-studio' ) ),
+			'workflow-reset-not-allowed'  => array( 'error', __( 'You are not allowed to perform this action.', 'ai-content-studio' ) ),
 		);
 
 		if ( ! isset( $notices[ $notice ] ) ) {
@@ -1015,6 +1074,48 @@ final class AICS_Content_Studio_Page {
 	 */
 	private static function get_article_draft_key(): string {
 		return 'aics_article_draft_' . get_current_user_id();
+	}
+
+	/**
+	 * Reports whether the current user has meaningful temporary workflow state.
+	 *
+	 * @return bool
+	 */
+	private static function has_workflow_state(): bool {
+		$keys = array(
+			self::get_state_key(),
+			self::get_error_state_key(),
+			self::get_ideas_state_key(),
+			self::get_selected_idea_key(),
+			self::get_article_draft_key(),
+		);
+
+		foreach ( $keys as $key ) {
+			if ( false !== get_transient( $key ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Writes one non-sensitive usage record without affecting the main action.
+	 */
+	private static function log_usage( string $event, string $operation, string $status, string $error_code, int $duration, int $object_id = 0, array $metadata = array() ): void {
+		AICS_Usage_Logger::log(
+			array(
+				'event_type'  => $event,
+				'operation'   => $operation,
+				'status'      => $status,
+				'provider'    => 'ai_request' === $event ? 'openai' : '',
+				'model'       => 'ai_request' === $event ? AICS_Settings::get_openai_model() : '',
+				'error_code'  => $error_code,
+				'object_id'   => $object_id,
+				'duration_ms' => $duration,
+				'metadata'    => $metadata,
+			)
+		);
 	}
 
 	/**
