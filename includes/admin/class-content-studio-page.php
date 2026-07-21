@@ -77,8 +77,10 @@ final class AICS_Content_Studio_Page {
 		$article_draft    = self::get_article_draft();
 		?>
 		<div class="wrap aics-admin-wrap aics-content-studio-page">
-			<h1><?php esc_html_e( 'AI Content Studio', 'ai-content-studio' ); ?></h1>
-			<p><?php esc_html_e( 'Prepare the business and writing inputs that will be used for AI-assisted blog generation in a future development task.', 'ai-content-studio' ); ?></p>
+			<header class="aics-page-header">
+				<h1 class="aics-page-title"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></h1>
+				<p class="aics-page-description"><?php esc_html_e( 'Turn your business context and topic into blog ideas, an editable article, and a reviewed WordPress draft.', 'ai-content-studio' ); ?></p>
+			</header>
 			<?php self::render_notice(); ?>
 			<?php if ( $has_workflow ) : ?>
 				<form class="aics-reset-workflow-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-confirm="<?php echo esc_attr__( 'Start a new content workflow? Your current temporary inputs, generated ideas, and article draft will be cleared. Any WordPress draft already created will remain available.', 'ai-content-studio' ); ?>">

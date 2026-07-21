@@ -28,23 +28,25 @@ final class AICS_Dashboard_Page {
 		);
 		?>
 		<div class="wrap aics-admin-wrap aics-dashboard-page">
-			<h1><?php esc_html_e( 'AI Content Studio Dashboard', 'ai-content-studio' ); ?></h1>
-			<p><?php esc_html_e( 'A lightweight summary of AI requests and WordPress drafts created by the plugin.', 'ai-content-studio' ); ?></p>
+			<header class="aics-page-header">
+				<h1 class="aics-page-title"><?php esc_html_e( 'AI Content Studio Dashboard', 'ai-content-studio' ); ?></h1>
+				<p class="aics-page-description"><?php esc_html_e( 'A lightweight summary of AI requests and WordPress drafts created by the plugin.', 'ai-content-studio' ); ?></p>
+			</header>
 			<div class="aics-dashboard-cards">
 				<?php foreach ( $cards as $key => $label ) : ?>
-					<div class="aics-dashboard-card"><span><?php echo esc_html( $label ); ?></span><strong><?php echo esc_html( number_format_i18n( $summary[ $key ] ) ); ?></strong></div>
+					<div class="aics-dashboard-card aics-dashboard-card--<?php echo esc_attr( 'successful_ai_requests' === $key ? 'success' : ( 'failed_ai_requests' === $key ? 'failed' : 'neutral' ) ); ?>"><span><?php echo esc_html( $label ); ?></span><strong><?php echo esc_html( number_format_i18n( $summary[ $key ] ) ); ?></strong></div>
 				<?php endforeach; ?>
 			</div>
 
 			<h2><?php esc_html_e( 'Recent Activity', 'ai-content-studio' ); ?></h2>
 			<?php if ( empty( $activity ) ) : ?>
-				<div class="aics-dashboard-empty"><p><?php esc_html_e( 'No usage activity has been recorded yet.', 'ai-content-studio' ); ?></p><a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a></div>
+				<div class="aics-dashboard-empty aics-empty-state"><h3><?php esc_html_e( 'No activity yet', 'ai-content-studio' ); ?></h3><p><?php esc_html_e( 'Generate blog ideas or an article to begin building your activity history.', 'ai-content-studio' ); ?></p><a class="button button-primary aics-button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a></div>
 			<?php else : ?>
 				<div class="aics-dashboard-table-wrap"><table class="widefat striped aics-dashboard-table"><thead><tr><th><?php esc_html_e( 'Activity', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Status', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Provider / Model', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'User', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Related Item', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Duration', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Date', 'ai-content-studio' ); ?></th></tr></thead><tbody>
 				<?php foreach ( $activity as $entry ) : ?><?php self::render_activity_row( $entry ); ?><?php endforeach; ?>
 				</tbody></table></div>
 			<?php endif; ?>
-			<p class="aics-dashboard-links"><a href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a> | <a href="<?php echo esc_url( admin_url( 'admin.php?page=aics-content-history' ) ); ?>"><?php esc_html_e( 'Content History', 'ai-content-studio' ); ?></a> | <a href="<?php echo esc_url( admin_url( 'admin.php?page=aics-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'ai-content-studio' ); ?></a></p>
+			<nav class="aics-dashboard-links" aria-label="<?php echo esc_attr__( 'Dashboard quick links', 'ai-content-studio' ); ?>"><a class="button button-primary aics-button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-content-history' ) ); ?>"><?php esc_html_e( 'Content History', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'ai-content-studio' ); ?></a></nav>
 		</div>
 		<?php
 	}

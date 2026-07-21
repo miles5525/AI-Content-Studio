@@ -10,8 +10,10 @@ final class AICS_System_Status_Page {
 		$labels      = array( 'good' => __( 'Good', 'ai-content-studio' ), 'warning' => __( 'Warning', 'ai-content-studio' ), 'critical' => __( 'Critical', 'ai-content-studio' ) );
 		?>
 		<div class="wrap aics-admin-wrap aics-system-status-page">
-			<h1><?php esc_html_e( 'System Status', 'ai-content-studio' ); ?></h1>
-			<p><?php esc_html_e( 'Review the local WordPress environment and AI Content Studio dependencies. Opening this page does not contact OpenAI.', 'ai-content-studio' ); ?></p>
+			<header class="aics-page-header">
+				<h1 class="aics-page-title"><?php esc_html_e( 'System Status', 'ai-content-studio' ); ?></h1>
+				<p class="aics-page-description"><?php esc_html_e( 'Review the local WordPress environment and AI Content Studio dependencies. Opening this page does not contact OpenAI.', 'ai-content-studio' ); ?></p>
+			</header>
 			<div class="aics-status-table-wrap"><table class="widefat striped aics-system-status-table"><thead><tr><th scope="col"><?php esc_html_e( 'Check', 'ai-content-studio' ); ?></th><th scope="col"><?php esc_html_e( 'Status', 'ai-content-studio' ); ?></th><th scope="col"><?php esc_html_e( 'Value', 'ai-content-studio' ); ?></th><th scope="col"><?php esc_html_e( 'Details', 'ai-content-studio' ); ?></th></tr></thead><tbody>
 			<?php foreach ( $checks as $check ) : ?><tr><th scope="row"><?php echo esc_html( $check['label'] ); ?></th><td><span class="aics-check-status aics-check-status--<?php echo esc_attr( $check['status'] ); ?>"><?php echo esc_html( $labels[ $check['status'] ] ); ?></span></td><td><?php echo esc_html( $check['value'] ); ?></td><td><?php echo esc_html( $check['message'] ); ?></td></tr><?php endforeach; ?>
 			</tbody></table></div>

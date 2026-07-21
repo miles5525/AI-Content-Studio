@@ -55,13 +55,16 @@ final class AICS_Content_History_Page {
 		);
 		?>
 		<div class="wrap aics-admin-wrap aics-content-history-page">
-			<h1><?php esc_html_e( 'Content History', 'ai-content-studio' ); ?></h1>
-			<p><?php esc_html_e( 'Native WordPress posts created by AI Content Studio appear here. Temporary articles that were never converted into posts are not included.', 'ai-content-studio' ); ?></p>
+			<header class="aics-page-header">
+				<h1 class="aics-page-title"><?php esc_html_e( 'Content History', 'ai-content-studio' ); ?></h1>
+				<p class="aics-page-description"><?php esc_html_e( 'Native WordPress posts created by AI Content Studio appear here. Temporary articles that were never converted into posts are not included.', 'ai-content-studio' ); ?></p>
+			</header>
 			<?php self::render_status_filters( $status ); ?>
 
 			<?php if ( ! $query->have_posts() ) : ?>
-				<div class="aics-history-empty">
-					<p><?php esc_html_e( 'No AI-generated WordPress posts were found.', 'ai-content-studio' ); ?></p>
+				<div class="aics-history-empty aics-empty-state">
+					<h3><?php esc_html_e( 'No generated posts yet', 'ai-content-studio' ); ?></h3>
+					<p><?php esc_html_e( 'Create a WordPress draft from the Content Studio workflow and it will appear here.', 'ai-content-studio' ); ?></p>
 					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a>
 				</div>
 			<?php else : ?>
@@ -140,7 +143,7 @@ final class AICS_Content_History_Page {
 					<strong><?php echo esc_html( $title ); ?></strong>
 				<?php endif; ?>
 			</td>
-			<td data-colname="<?php echo esc_attr__( 'Status', 'ai-content-studio' ); ?>"><?php echo esc_html( self::get_status_label( $post->post_status ) ); ?></td>
+			<td data-colname="<?php echo esc_attr__( 'Status', 'ai-content-studio' ); ?>"><span class="aics-history-status aics-history-status--<?php echo esc_attr( sanitize_html_class( $post->post_status ) ); ?>"><?php echo esc_html( self::get_status_label( $post->post_status ) ); ?></span></td>
 			<td data-colname="<?php echo esc_attr__( 'Primary Keyword', 'ai-content-studio' ); ?>"><?php echo esc_html( self::get_text_meta( $post->ID, '_aics_primary_keyword' ) ); ?></td>
 			<td data-colname="<?php echo esc_attr__( 'Search Intent', 'ai-content-studio' ); ?>"><?php echo esc_html( self::get_mapped_meta( $post->ID, '_aics_search_intent', self::get_intent_labels() ) ); ?></td>
 			<td data-colname="<?php echo esc_attr__( 'Tone', 'ai-content-studio' ); ?>"><?php echo esc_html( self::get_mapped_meta( $post->ID, '_aics_requested_tone', self::get_tone_labels() ) ); ?></td>

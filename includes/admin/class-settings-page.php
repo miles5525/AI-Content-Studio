@@ -41,11 +41,14 @@ final class AICS_Settings_Page {
 		$key_configured = AICS_Settings::has_openai_api_key();
 		?>
 		<div class="wrap aics-admin-wrap aics-settings-page">
-			<h1><?php esc_html_e( 'AI Content Studio Settings', 'ai-content-studio' ); ?></h1>
+			<header class="aics-page-header">
+				<h1 class="aics-page-title"><?php esc_html_e( 'AI Content Studio Settings', 'ai-content-studio' ); ?></h1>
+				<p class="aics-page-description"><?php esc_html_e( 'Configure the AI provider and verify the saved connection securely.', 'ai-content-studio' ); ?></p>
+			</header>
 			<?php self::render_notice(); ?>
 
 			<div class="aics-settings-section">
-				<h2><?php esc_html_e( 'OpenAI', 'ai-content-studio' ); ?></h2>
+				<h2><?php esc_html_e( 'AI Provider Configuration', 'ai-content-studio' ); ?></h2>
 				<p class="aics-api-key-status <?php echo $key_configured ? 'aics-api-key-status--configured' : 'aics-api-key-status--missing'; ?>">
 					<?php echo esc_html( $key_configured ? __( 'API key configured', 'ai-content-studio' ) : __( 'No API key configured', 'ai-content-studio' ) ); ?>
 				</p>

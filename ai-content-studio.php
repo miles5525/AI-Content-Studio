@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.9.0' );
-define( 'AICS_DB_VERSION', '0.2.0' );
+define( 'AICS_DB_VERSION', '0.3.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );
@@ -30,6 +30,7 @@ define( 'AICS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 require_once AICS_PLUGIN_DIR . 'includes/core/class-permissions.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-installer.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-usage-log-repository.php';
+require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-profile-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-settings.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-usage-logger.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-system-check.php';

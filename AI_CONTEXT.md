@@ -504,7 +504,39 @@ Focused dashboard-count correction after Task 10:
 * Recent Activity remains usage-log based. No historical log rows were created or backfilled.
 * Published, scheduled, pending, private, trashed, deleted, unmarked, and non-`post` content is excluded from the draft card.
 
-The next planned task is release documentation, `readme.txt`, packaging, and final regression testing. It has not begun.
+## SupportCandy-Inspired Admin UI Design System
+
+The focused admin UI task is complete. The installed SupportCandy AI Assistant was inspected only as a visual reference; AI Content Studio does not enqueue its assets, import its PHP, call its hooks, read its settings, or require it at runtime.
+
+The scoped `.aics-admin-wrap` token system adopts the reference plugin's blue-led WordPress admin palette: primary `#2563eb`, primary hover `#1d4ed8`, primary soft `#f0f6fc`, focus accent `#72aee6`, white surfaces, muted surface `#f6f7f7`, standard border `#dcdcde`, strong border `#8c8f94`, text `#1d2327`, muted text `#646970`, success `#0a5c20`, warning `#704d00`, and error `#8a2424`. Shared 4px, 6px, and 8px radii and restrained small and medium shadows are also defined locally.
+
+Shared UI classes now cover page headers, descriptions, cards, sections, actions, empty states, status badges, summary grids, primary/danger buttons, tables, forms, and diagnostics. Dashboard cards have clearer metric hierarchy and restrained semantic accents; Recent Activity, quick links, and the empty state are presented as intentional components. Create Content has consistent stage cards, selected idea treatment, focus-visible idea controls, a contained editor area, separated actions, and clearer draft/result panels. Content History retains its native table, query, filters, pagination, and columns while adding textual status pills, a designed empty state, and locally scrollable narrow-width behavior. Settings groups provider configuration, credential status, connection testing, and removal controls consistently without exposing more of the key. System Status uses the same headers, tables, textual badges, diagnostic panel, and accessible clipboard feedback.
+
+Responsive behavior was reviewed for approximately 1280px, 1024px, 782px, and 480px widths. Summary grids collapse from multiple columns to two and then one, idea cards use a minimum-zero single-column layout on small screens, controls remain within containers, actions wrap, and wide tables scroll only inside their local wrappers. Accessibility decisions include persistent visible labels, strong keyboard focus rings, text plus color for statuses and selection, semantic headings/tables, meaningful empty-state actions, preserved `aria-live` clipboard feedback, and no styling inside the TinyMCE iframe. Full WCAG compliance is not claimed.
+
+Files modified by this UI task: `assets/css/admin.css`, the Dashboard, Content Studio, Content History, Settings, and System Status admin page classes, and `AI_CONTEXT.md`. No provider, prompt, workflow-state, database, permission, nonce, post-generation, query, activation, or uninstall behavior was changed. Current limitations remain: tables use local horizontal scrolling at narrow widths, the workflow stage treatment follows existing conditional sections rather than adding a progress engine, and full browser/manual visual regression testing is still required.
+
+## Automation Blueprint and Foundation Task 1
+
+The master product direction is one persistent content-operations workflow engine supporting three operating modes: `autopilot` for unattended future processing, `approval` for future idea/article/publishing gates, and `manual` for the existing administrator-controlled Content Studio. Automation Foundation Task 1 is complete and adds persistence only; no automation is running yet.
+
+Database schema version `0.3.0` adds `{$wpdb->prefix}aics_automation_profiles` through the existing `dbDelta()` installer. The table contains an unsigned bigint primary ID; unique 191-character `profile_slug`; visible `profile_name`; indexed `mode` and `status`; five LONGTEXT JSON configuration columns; nullable, indexed `next_run_at`; nullable `last_run_at`; controlled `last_error_code`; indexed unsigned `created_by` and `updated_by`; and UTC `created_at` and `updated_at`. It has no foreign keys or native MySQL JSON columns. The allowed modes are `autopilot`, `approval`, and `manual`; statuses are `disabled`, `active`, `paused`, and `error`. No default profile is inserted automatically.
+
+Configuration fields are encoded with `wp_json_encode()` and decoded to PHP arrays; invalid stored JSON safely becomes an empty array. `business_context` accepts only the documented plain-text business fields and deduplicated, length-limited topic/claim arrays. `content_settings` bounds cycle counts and lookback days, constrains tone and article length, and normalizes booleans. `schedule_settings` constrains frequency, interval and volume, orders allowlisted weekdays predictably, validates 24-hour time and ISO dates, but does not calculate schedules. `workflow_rules` contains only three approval booleans. `publishing_settings` constrains future publishing mode/status choices and stores non-negative category/author IDs without executing or validating those choices against WordPress objects.
+
+`AICS_Automation_Profile_Repository` owns normalized `create()`, partial `update()`, `get_by_id()`, `get_by_slug()`, bounded `get_profiles()`, strict UTC `get_due_profiles()`, separated `update_runtime_fields()`, and `table_exists()`. Profile slugs are immutable after creation. Reads cast IDs, normalize mode/status, decode JSON, and preserve UTC database datetime strings. Creates and updates return controlled result codes and never expose database errors. Runtime updates cannot modify configuration or creation audit fields. `next_run_at` and `last_run_at` accept only exact UTC `Y-m-d H:i:s` values or NULL; audit timestamps use `current_time( 'mysql', true )`. Error codes use `sanitize_key()` and are limited to 100 characters.
+
+Fresh activation installs both the established usage-log table and the automation-profile table. Existing installations upgrade on the normal `init` routine without reactivation; the installed version advances only after both required prefixed tables exist and both schema operations report no database error. Matching installations return before `dbDelta()`, existing logs/settings/posts are untouched, and no automation hook or cron event was added. The pre-existing daily usage-log retention event is unchanged.
+
+The established non-destructive lifecycle policy remains: deactivation only clears the usage-retention schedule, and uninstall does not drop tables or delete settings. Automation profiles are therefore preserved on deactivation and uninstall pending final product-wide cleanup decisions.
+
+The profile table stores configuration and scheduling state only. It must never contain provider credentials or headers, passwords, database credentials, cookies, nonces, raw provider output/errors, emails, prompts, generated ideas, article content, or generated articles.
+
+Files created: `includes/database/class-automation-profile-repository.php`. Files modified for this foundation: `ai-content-studio.php`, `includes/database/class-installer.php`, and `AI_CONTEXT.md`. The previously completed admin design-system changes remain preserved and functionally separate.
+
+Current limitations: there is no Automation UI, default profile, scheduler, next-run calculator, lock, queue, run history, approval system, notification, AI call, post generation, or publishing behavior. Cross-field start/end-date rules, referenced author/category validation, and runtime transition policy are deferred to later settings and execution services.
+
+The next planned task is Automation Foundation Task 2 — Automation Settings page and default profile management. It has not begun.
 
 ## Important Instruction for Codex
 
