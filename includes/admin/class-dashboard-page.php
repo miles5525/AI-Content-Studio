@@ -17,6 +17,7 @@ final class AICS_Dashboard_Page {
 
 		$repository = new AICS_Usage_Log_Repository();
 		$summary    = $repository->get_summary();
+		$summary['drafts_created'] = self::count_generated_wordpress_drafts();
 		$activity   = $repository->get_recent( 10 );
 		$cards      = array(
 			'total_ai_requests'      => __( 'Total AI Requests', 'ai-content-studio' ),
@@ -74,6 +75,37 @@ final class AICS_Dashboard_Page {
 		if ( $milliseconds < 1 ) { return '—'; }
 		if ( $milliseconds < 1000 ) { return sprintf( __( '%d ms', 'ai-content-studio' ), $milliseconds ); }
 		return sprintf( __( '%.2f s', 'ai-content-studio' ), $milliseconds / 1000 );
+	}
+
+	/**
+	 * Counts currently existing AI Content Studio WordPress drafts.
+	 *
+	 * This deliberately uses native post state instead of usage logs so drafts
+	 * created before logging was introduced are included and deleted, trashed,
+	 * or status-changed posts are excluded.
+	 */
+	private static function count_generated_wordpress_drafts(): int {
+		$query = new WP_Query(
+			array(
+				'post_type'              => 'post',
+				'post_status'            => 'draft',
+				'posts_per_page'         => 1,
+				'fields'                 => 'ids',
+				'no_found_rows'          => false,
+				'ignore_sticky_posts'    => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array(
+					array(
+						'key'     => '_aics_generated_post',
+						'value'   => '1',
+						'compare' => '=',
+					),
+				),
+			)
+		);
+
+		return absint( $query->found_posts );
 	}
 
 	private function __construct() {}

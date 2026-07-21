@@ -251,3 +251,22 @@
 .aics-status { font-weight: 600; }
 .aics-status--success { color: #008a20; }
 .aics-status--failed { color: #b32d2e; }
+
+.aics-status-table-wrap { overflow-x: auto; margin-top: 18px; }
+.aics-system-status-table { min-width: 760px; }
+.aics-system-status-table th:first-child { width: 20%; }
+.aics-check-status { font-weight: 600; }
+.aics-check-status--good { color: #008a20; }
+.aics-check-status--warning { color: #996800; }
+.aics-check-status--critical { color: #b32d2e; }
+.aics-diagnostics { max-width: 900px; margin-top: 24px; padding: 20px; border: 1px solid #c3c4c7; background: #fff; }
+.aics-diagnostics h2 { margin-top: 0; }
+.aics-diagnostics label { display: inline-block; margin-bottom: 6px; }
+.aics-copy-status { min-height: 1.5em; }
+
+@media screen and (max-width: 782px) {
+	.aics-reset-workflow-form { align-items: flex-start; flex-direction: column; }
+	.aics-dashboard-cards { grid-template-columns: 1fr; }
+	.aics-wordpress-draft-result .button { margin: 4px 4px 4px 0; }
+	.aics-wordpress-draft-result .button + .button { margin-left: 0; }
+}

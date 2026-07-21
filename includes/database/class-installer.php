@@ -34,6 +34,10 @@ final class Installer {
 	 * Applies schema changes only when the installed version is behind.
 	 */
 	public static function maybe_upgrade(): void {
+		if ( AICS_VERSION !== (string) get_option( 'aics_version', '' ) ) {
+			update_option( 'aics_version', AICS_VERSION, false );
+		}
+
 		$installed = (string) get_option( 'aics_db_version', '0.0.0' );
 
 		if ( ! version_compare( $installed, AICS_DB_VERSION, '<' ) ) {

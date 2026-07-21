@@ -31,7 +31,17 @@ final class Assets {
 	 * @return void
 	 */
 	public function enqueue( string $hook_suffix ): void {
-		if ( 'toplevel_page_ai-content-studio' !== $hook_suffix && ! str_contains( $hook_suffix, '_page_aics-' ) ) {
+		$allowed_hooks = array(
+			'toplevel_page_ai-content-studio',
+			'ai-content-studio_page_aics-create-content',
+			'ai-content-studio_page_aics-content-history',
+			'ai-content-studio_page_aics-settings',
+			'ai-content-studio_page_aics-system-status',
+			'admin_page_aics-content-ideas',
+			'admin_page_aics-brand-profile',
+		);
+
+		if ( ! in_array( $hook_suffix, $allowed_hooks, true ) ) {
 			return;
 		}
 
@@ -49,5 +59,9 @@ final class Assets {
 			AICS_VERSION,
 			true
 		);
+
+		if ( 'ai-content-studio_page_aics-system-status' === $hook_suffix ) {
+			wp_enqueue_script( 'aics-system-status', AICS_PLUGIN_URL . 'assets/js/system-status.js', array(), AICS_VERSION, true );
+		}
 	}
 }

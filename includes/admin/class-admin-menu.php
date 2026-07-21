@@ -46,10 +46,8 @@ final class Admin_Menu {
 
 		$pages = array(
 			array( self::MENU_SLUG, __( 'Dashboard', 'ai-content-studio' ), 'render_dashboard' ),
-			array( 'aics-content-ideas', __( 'Content Ideas', 'ai-content-studio' ), 'render_content_ideas' ),
 			array( 'aics-create-content', __( 'Create Content', 'ai-content-studio' ), 'render_create_content' ),
 			array( 'aics-content-history', __( 'Content History', 'ai-content-studio' ), 'render_content_history' ),
-			array( 'aics-brand-profile', __( 'Brand Profile', 'ai-content-studio' ), 'render_brand_profile' ),
 			array( 'aics-settings', __( 'Settings', 'ai-content-studio' ), 'render_settings' ),
 			array( 'aics-system-status', __( 'System Status', 'ai-content-studio' ), 'render_system_status' ),
 		);
@@ -64,6 +62,10 @@ final class Admin_Menu {
 				array( $this, $page[2] )
 			);
 		}
+
+		// Preserve established placeholder URLs without showing unfinished beta navigation.
+		add_submenu_page( null, __( 'Content Ideas', 'ai-content-studio' ), __( 'Content Ideas', 'ai-content-studio' ), Permissions::manage(), 'aics-content-ideas', array( $this, 'render_content_ideas' ) );
+		add_submenu_page( null, __( 'Brand Profile', 'ai-content-studio' ), __( 'Brand Profile', 'ai-content-studio' ), Permissions::manage(), 'aics-brand-profile', array( $this, 'render_brand_profile' ) );
 	}
 
 	public function render_dashboard(): void { \AICS_Dashboard_Page::render(); }
@@ -72,7 +74,7 @@ final class Admin_Menu {
 	public function render_content_history(): void { \AICS_Content_History_Page::render(); }
 	public function render_brand_profile(): void { $this->render_page( __( 'Brand Profile', 'ai-content-studio' ) ); }
 	public function render_settings(): void { \AICS_Settings_Page::render(); }
-	public function render_system_status(): void { $this->render_page( __( 'System Status', 'ai-content-studio' ) ); }
+	public function render_system_status(): void { \AICS_System_Status_Page::render(); }
 
 	/**
 	 * Renders a protected placeholder page.

@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 through 9 are complete. The plugin now includes:
+Tasks 1 through 10 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -470,13 +470,41 @@ Dashboard totals are calculated with aggregate SQL rather than loading logs: AI 
 
 Logs are retained for 30 days through `aics_cleanup_usage_logs`. Activation schedules one daily event, runtime startup restores a missing schedule without duplicating it, deactivation clears the event without deleting logs, and cleanup deletes only rows older than the UTC cutoff. Uninstall remains non-destructive because the established uninstall policy defers cleanup until final data-storage decisions are made.
 
+Task 10 prepared the plugin for private beta stabilization:
+
+* `includes/services/class-system-check.php` performs 20 controlled, read-only environment, WordPress, provider, database, cron, upload, permission, permalink, and debug checks and creates a safe diagnostic report.
+* `includes/admin/class-system-status-page.php` renders a capability-protected status table, accessible textual status labels, a visible diagnostic textarea, clipboard button, and aria-live result.
+* `assets/js/system-status.js` provides Clipboard API support plus a selectable-textarea fallback and loads only on System Status.
+* `includes/admin/class-assets.php` retains plugin-admin-only asset loading and scopes the clipboard script to `aics-system-status`.
+* `includes/admin/class-admin-menu.php` now shows Dashboard, Create Content, Content History, Settings, and System Status in that order. Established Content Ideas and Brand Profile placeholder slugs remain registered as hidden compatibility pages.
+* `assets/css/admin.css` adds readable status styling and narrow-screen improvements for cards, tables, workflow controls, and action buttons.
+* `ai-content-studio.php`, `README.md`, and `AI_CONTEXT.md` align private-beta version and documentation.
+
+The plugin version is `0.9.0`; the independent database schema version remains `0.2.0`. Plugin headers and `AICS_VERSION` match, and all admin assets use `AICS_VERSION`. The placeholder plugin URI was replaced with the project GitHub repository and foundation-era README statements were removed.
+
+System Status checks WordPress 6.4+, PHP 8.0+ with PHP 8.1 recommended, HTTPS, local REST infrastructure, cURL, JSON, OpenSSL, WordPress HTTP API availability, database connectivity, usage-table presence, installed/code schema versions, WP-Cron configuration, AICS cleanup scheduling and duplicates, upload writability, OpenAI provider/key/model configuration, post-creation permission, permalinks, and debug mode. It makes no OpenAI or external HTTP request and performs no repair or mutation.
+
+Diagnostics include only versions, language, multisite, controlled availability states, provider name, yes/no credential configuration, selected allowlisted model, cron/debug state, PHP memory limit, and execution time. They exclude API-key values and fragments, database credentials/host/name, cookies, nonces, emails, filesystem paths, article data, prompts, provider responses, usage entries, salts, and server-variable dumps.
+
+Security review confirmed state-changing actions retain capability and nonce checks, redirects remain safe and terminating, workflow transients remain user-scoped, generated HTML remains allowlisted, post creation stays draft-only, logging metadata remains allowlisted, edit links remain capability-checked, retention targets only expired AICS rows, and no public REST/AJAX endpoints exist. No functional security correction was required.
+
 ## Current Task Boundary
 
-Task 9 adds only operation-level usage records, aggregate dashboard summaries, recent activity, and 30-day retention. It adds no token accounting, cost calculation, billing, limits, charts, exports, log filters, log deletion UI, content/prompt logging, external analytics, REST/AJAX endpoints, or additional providers.
+Task 10 adds only private-beta diagnostics, navigation cleanup, accessibility/responsive polish, version consistency, scoped clipboard behavior, and release cleanup. It adds no automated repair, API testing on page load, publishing, scheduling, SEO, images, social integrations, providers, licensing, billing, telemetry, exports, or public endpoints.
 
-Current limitations: logging is best effort and deliberately contains no exact token or cost data. Dashboard summaries are lifetime totals within the retention window, and there is no reporting filter or chart. Deactivation preserves the table and logs; uninstall also preserves them under the current policy.
+Current limitations: System Status reports local configuration but does not repair it or test live OpenAI connectivity. Clipboard behavior depends on browser support, with the visible textarea as fallback. This is a private-beta build and makes no claim of full WCAG compliance or broad hosting-matrix certification.
 
-The next planned task is system status, final UX polish, and release-readiness checks. It has not begun.
+Current release status: private beta candidate `0.9.0`.
+
+Focused dashboard-count correction after Task 10:
+
+* `includes/admin/class-dashboard-page.php` now derives **WordPress Drafts Created** from current native WordPress posts with `post_type = post`, `post_status = draft`, and `_aics_generated_post = 1`.
+* The query retrieves IDs only, requests one row solely for the count query, and disables unnecessary term and metadata cache population.
+* Total, successful, and failed AI requests plus Articles Generated remain usage-log metrics.
+* Recent Activity remains usage-log based. No historical log rows were created or backfilled.
+* Published, scheduled, pending, private, trashed, deleted, unmarked, and non-`post` content is excluded from the draft card.
+
+The next planned task is release documentation, `readme.txt`, packaging, and final regression testing. It has not begun.
 
 ## Important Instruction for Codex
 
