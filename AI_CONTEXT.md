@@ -304,19 +304,36 @@ Never:
 
 ## Current Development Status
 
-Task 1 is complete. The plugin foundation now includes:
+Tasks 1 and 2 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
 * Installation metadata stored in WordPress options
 * A centralized `Permissions` class based on `manage_options`
-* An AI Content Studio admin menu with seven placeholder pages
+* An AI Content Studio admin menu with six placeholder pages and a functional Settings page
 * Admin CSS and JavaScript scoped to the plugin's admin pages
 * Direct-access protection, uninstall safety, README documentation, and Git ignore rules
+* A functional Settings page for saving an OpenAI API key and selecting an allowed model
+* Explicit, nonce-protected actions for saving settings and removing only the API key
+
+Task 2 added or changed:
+
+* `includes/services/class-settings.php`
+* `includes/admin/class-settings-page.php`
+* `ai-content-studio.php`
+* `includes/core/class-plugin.php`
+* `includes/admin/class-admin-menu.php`
+* `assets/css/admin.css`
+* `assets/js/admin.js`
+* `AI_CONTEXT.md`
+
+Settings use one non-autoloaded WordPress option array named `aics_settings`. Supported keys are `openai_api_key` and `openai_model`; the default model is `gpt-4.1-mini`. API keys are trimmed, conservatively sanitized, never rendered back into HTML, and preserved when the save field is blank. The key can be removed only through its dedicated action. Models are validated against the Task 2 allowlist. WordPress option storage is intentionally used without encryption for the BYO-key MVP.
 
 ## Current Task Boundary
 
-Task 1 added no AI integrations, settings functionality, custom database tables, content generation, image generation, SEO functionality, or social functionality.
+Task 2 adds settings storage and administration only. It adds no OpenAI requests, connection test, provider foundation, AI engine, prompts, content generation, post creation, usage logging, custom database tables, REST or AJAX endpoints, encryption, social functionality, or publishing automation.
+
+The next planned task is the OpenAI provider foundation and connection test. It has not begun.
 
 ## Important Instruction for Codex
 

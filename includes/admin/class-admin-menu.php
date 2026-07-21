@@ -71,7 +71,7 @@ final class Admin_Menu {
 	public function render_create_content(): void { $this->render_page( __( 'Create Content', 'ai-content-studio' ) ); }
 	public function render_content_history(): void { $this->render_page( __( 'Content History', 'ai-content-studio' ) ); }
 	public function render_brand_profile(): void { $this->render_page( __( 'Brand Profile', 'ai-content-studio' ) ); }
-	public function render_settings(): void { $this->render_page( __( 'Settings', 'ai-content-studio' ) ); }
+	public function render_settings(): void { \AICS_Settings_Page::render(); }
 	public function render_system_status(): void { $this->render_page( __( 'System Status', 'ai-content-studio' ) ); }
 
 	/**

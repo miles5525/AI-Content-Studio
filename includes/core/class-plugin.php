@@ -49,6 +49,7 @@ final class Plugin {
 		if ( is_admin() ) {
 			( new Admin_Menu() )->register();
 			( new Assets() )->register();
+			\AICS_Settings_Page::register();
 		}
 	}
 
