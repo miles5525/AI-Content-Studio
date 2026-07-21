@@ -50,6 +50,7 @@ final class Plugin {
 			( new Admin_Menu() )->register();
 			( new Assets() )->register();
 			\AICS_Settings_Page::register();
+			\AICS_Content_Studio_Page::register();
 		}
 	}
 

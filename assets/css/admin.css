@@ -56,3 +56,22 @@
 .aics-connection-actions .description {
 	margin: 0 0 10px;
 }
+
+.aics-content-studio-page form {
+	max-width: 900px;
+}
+
+.aics-content-section {
+	margin-top: 20px;
+	padding: 20px 24px;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+}
+
+.aics-content-section h2 {
+	margin-top: 0;
+}
+
+.aics-required {
+	color: #d63638;
+}

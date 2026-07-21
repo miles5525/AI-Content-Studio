@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 through 3 are complete. The plugin now includes:
+Tasks 1 through 4 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -343,13 +343,33 @@ The HTTP client uses `wp_remote_post()`, a bounded timeout, `wp_json_encode()`, 
 
 The OpenAI provider uses `https://api.openai.com/v1/responses` with the saved API key and allowlisted model from `AICS_Settings`. The Settings page submits a dedicated nonce-protected action, the server performs a small Responses API request, and the user is redirected to a controlled success or failure notice. No credential, raw API response, or arbitrary remote message is rendered or placed in a URL.
 
+Task 4 replaced the Create Content placeholder with the Content Studio form foundation. The form collects:
+
+* Business or website context, required with a 3000-character maximum
+* Topic or keyword, required with a 250-character maximum
+* An allowlisted tone, defaulting to `professional`
+* An allowlisted approximate article length, defaulting to `medium`
+
+Task 4 added or changed:
+
+* `includes/admin/class-content-studio-page.php`
+* `ai-content-studio.php`
+* `includes/core/class-plugin.php`
+* `includes/admin/class-admin-menu.php`
+* `assets/css/admin.css`
+* `AI_CONTEXT.md`
+
+The form uses a dedicated `admin-post.php` action with centralized capability enforcement and nonce verification. Text values are unslashed, sanitized, trimmed, checked without silent truncation, and safely escaped when redisplayed. Select values are checked against fixed allowlists. Redirects contain only controlled notice codes and never contain form data.
+
+Each user's latest valid form state is stored for 20 minutes in an `aics_content_inputs_{user_id}` transient. A separate five-minute user-scoped validation transient preserves sanitized text after a failed submission without overwriting the last valid state. No sessions, API keys, secrets, or permanent plugin settings are used for Content Studio state.
+
 ## Current Task Boundary
 
-Task 3 adds only a reusable HTTP client, a minimal provider contract, the OpenAI provider connection test, and its Settings-page workflow. It adds no content or article generation, AI or prompt engine, post creation, usage or prompt logging, custom database tables, REST or AJAX endpoints, streaming, background processing, image or SEO generation, social integrations, auto-publishing, multiple providers, or API-key encryption.
+Task 4 adds only Content Studio form rendering, server-side validation, controlled notices, and temporary per-user state. It adds no blog ideas, OpenAI calls, AI or prompt engine, request or response value objects, article generation, post creation or editor integration, usage or prompt logging, custom database tables, REST or AJAX endpoints, streaming, background processing, image or SEO generation, content history, social features, or auto-publishing.
 
-Current limitations: the API key remains unencrypted in WordPress option storage, model availability is not discovered dynamically, the test is synchronous, and no provider operation beyond connection testing exists.
+Current limitations: validated Content Studio inputs expire after 20 minutes and are not yet consumed by an AI workflow. The API key remains unencrypted in WordPress option storage, model availability is not discovered dynamically, and the connection test is synchronous.
 
-The next planned task is the Content Studio form foundation without AI generation. It has not begun.
+The next planned task is blog-idea generation architecture using the saved Content Studio inputs. It has not begun.
 
 ## Important Instruction for Codex
 
