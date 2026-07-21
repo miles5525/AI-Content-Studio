@@ -1,0 +1,23 @@
+# Operating system files.
+.DS_Store
+Thumbs.db
+
+# IDE and editor settings.
+.idea/
+.vscode/
+*.swp
+
+# Runtime and test artifacts.
+*.log
+.phpunit.result.cache
+coverage/
+
+# Local environment configuration.
+.env
+.env.*
+!.env.example
+
+# Dependency directories (reserved for future phases).
+/vendor/
+/node_modules/
+
