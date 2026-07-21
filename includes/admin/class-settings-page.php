@@ -16,6 +16,7 @@ final class AICS_Settings_Page {
 	private const PAGE_SLUG = 'aics-settings';
 	private const SAVE_ACTION = 'aics_save_settings';
 	private const REMOVE_ACTION = 'aics_remove_api_key';
+	private const TEST_ACTION = 'aics_test_openai_connection';
 
 	/**
 	 * Registers settings write handlers.
@@ -25,6 +26,7 @@ final class AICS_Settings_Page {
 	public static function register(): void {
 		add_action( 'admin_post_' . self::SAVE_ACTION, array( self::class, 'handle_save' ) );
 		add_action( 'admin_post_' . self::REMOVE_ACTION, array( self::class, 'handle_remove_api_key' ) );
+		add_action( 'admin_post_' . self::TEST_ACTION, array( self::class, 'handle_test_connection' ) );
 	}
 
 	/**
@@ -77,6 +79,15 @@ final class AICS_Settings_Page {
 				</form>
 
 				<?php if ( $key_configured ) : ?>
+					<div class="aics-connection-actions">
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_ACTION ); ?>">
+							<?php wp_nonce_field( self::TEST_ACTION, 'aics_test_connection_nonce' ); ?>
+							<p class="description"><?php esc_html_e( 'The connection test uses the currently saved API key and selected model. Save changes before testing.', 'ai-content-studio' ); ?></p>
+							<?php submit_button( __( 'Test Connection', 'ai-content-studio' ), 'secondary', 'submit', false ); ?>
+						</form>
+					</div>
+
 					<form class="aics-remove-key-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-confirm="<?php echo esc_attr__( 'Are you sure you want to remove the saved API key?', 'ai-content-studio' ); ?>">
 						<input type="hidden" name="action" value="<?php echo esc_attr( self::REMOVE_ACTION ); ?>">
 						<?php wp_nonce_field( self::REMOVE_ACTION, 'aics_remove_key_nonce' ); ?>
@@ -123,6 +134,21 @@ final class AICS_Settings_Page {
 	}
 
 	/**
+	 * Tests the saved OpenAI configuration without changing settings.
+	 *
+	 * @return void
+	 */
+	public static function handle_test_connection(): void {
+		self::require_permission();
+		check_admin_referer( self::TEST_ACTION, 'aics_test_connection_nonce' );
+
+		$provider = new AICS_OpenAI_Provider();
+		$result   = $provider->test_connection();
+
+		self::redirect( $result['code'] );
+	}
+
+	/**
 	 * Enforces the centralized plugin permission.
 	 *
 	 * @return void
@@ -158,9 +184,18 @@ final class AICS_Settings_Page {
 	private static function render_notice(): void {
 		$notice = isset( $_GET['aics_notice'] ) && is_string( $_GET['aics_notice'] ) ? sanitize_key( wp_unslash( $_GET['aics_notice'] ) ) : '';
 		$notices = array(
-			'settings-saved'  => array( 'success', __( 'Settings saved.', 'ai-content-studio' ) ),
-			'api-key-removed' => array( 'success', __( 'API key removed.', 'ai-content-studio' ) ),
-			'invalid-model'   => array( 'error', __( 'The selected model is invalid. No settings were changed.', 'ai-content-studio' ) ),
+			'settings-saved'    => array( 'success', __( 'Settings saved.', 'ai-content-studio' ) ),
+			'api-key-removed'   => array( 'success', __( 'API key removed.', 'ai-content-studio' ) ),
+			'invalid-model'     => array( 'error', __( 'The selected model is invalid. No settings were changed.', 'ai-content-studio' ) ),
+			'connection-success' => array( 'success', __( 'OpenAI connection successful.', 'ai-content-studio' ) ),
+			'missing-api-key'   => array( 'error', __( 'No OpenAI API key is configured.', 'ai-content-studio' ) ),
+			'invalid-api-key'   => array( 'error', __( 'OpenAI rejected the API key.', 'ai-content-studio' ) ),
+			'quota-error'       => array( 'error', __( 'OpenAI reported a quota or billing issue.', 'ai-content-studio' ) ),
+			'rate-limit'        => array( 'error', __( 'OpenAI rate limit reached. Please try again later.', 'ai-content-studio' ) ),
+			'model-unavailable' => array( 'error', __( 'The selected model is not available for this account.', 'ai-content-studio' ) ),
+			'network-error'     => array( 'error', __( 'The site could not connect to OpenAI.', 'ai-content-studio' ) ),
+			'invalid-response'  => array( 'error', __( 'OpenAI returned an unexpected response.', 'ai-content-studio' ) ),
+			'api-error'         => array( 'error', __( 'OpenAI could not complete the connection test.', 'ai-content-studio' ) ),
 		);
 
 		if ( ! isset( $notices[ $notice ] ) ) {

@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 and 2 are complete. The plugin now includes:
+Tasks 1 through 3 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -329,11 +329,27 @@ Task 2 added or changed:
 
 Settings use one non-autoloaded WordPress option array named `aics_settings`. Supported keys are `openai_api_key` and `openai_model`; the default model is `gpt-4.1-mini`. API keys are trimmed, conservatively sanitized, never rendered back into HTML, and preserved when the save field is blank. The key can be removed only through its dedicated action. Models are validated against the Task 2 allowlist. WordPress option storage is intentionally used without encryption for the BYO-key MVP.
 
+Task 3 added a minimal provider architecture:
+
+* `includes/providers/interface-provider.php` defines the provider name and connection-test contract.
+* `includes/providers/class-openai-provider.php` implements the OpenAI connection test.
+* `includes/services/class-http-client.php` wraps JSON POST requests through the WordPress HTTP API.
+* `includes/admin/class-settings-page.php` now registers and renders the dedicated Test Connection workflow.
+* `ai-content-studio.php` loads the provider contract, HTTP client, and OpenAI provider.
+* `assets/css/admin.css` includes minimal connection-action spacing.
+* `AI_CONTEXT.md` documents the completed task.
+
+The HTTP client uses `wp_remote_post()`, a bounded timeout, `wp_json_encode()`, normalized result arrays, JSON validation, and safe handling for network, HTTP, empty-body, API-error, and malformed-response failures. It never logs or returns request headers or request bodies in messages.
+
+The OpenAI provider uses `https://api.openai.com/v1/responses` with the saved API key and allowlisted model from `AICS_Settings`. The Settings page submits a dedicated nonce-protected action, the server performs a small Responses API request, and the user is redirected to a controlled success or failure notice. No credential, raw API response, or arbitrary remote message is rendered or placed in a URL.
+
 ## Current Task Boundary
 
-Task 2 adds settings storage and administration only. It adds no OpenAI requests, connection test, provider foundation, AI engine, prompts, content generation, post creation, usage logging, custom database tables, REST or AJAX endpoints, encryption, social functionality, or publishing automation.
+Task 3 adds only a reusable HTTP client, a minimal provider contract, the OpenAI provider connection test, and its Settings-page workflow. It adds no content or article generation, AI or prompt engine, post creation, usage or prompt logging, custom database tables, REST or AJAX endpoints, streaming, background processing, image or SEO generation, social integrations, auto-publishing, multiple providers, or API-key encryption.
 
-The next planned task is the OpenAI provider foundation and connection test. It has not begun.
+Current limitations: the API key remains unencrypted in WordPress option storage, model availability is not discovered dynamically, the test is synchronous, and no provider operation beyond connection testing exists.
+
+The next planned task is the Content Studio form foundation without AI generation. It has not begun.
 
 ## Important Instruction for Codex
 

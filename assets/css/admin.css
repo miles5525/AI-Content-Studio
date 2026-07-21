@@ -46,3 +46,13 @@
 	padding-top: 16px;
 	border-top: 1px solid #dcdcde;
 }
+
+.aics-connection-actions {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+}
+
+.aics-connection-actions .description {
+	margin: 0 0 10px;
+}
