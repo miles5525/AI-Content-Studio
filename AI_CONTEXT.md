@@ -304,7 +304,7 @@ Never:
 
 ## Current Development Status
 
-Tasks 1 through 5 are complete. The plugin now includes:
+Tasks 1 through 7 are complete. The plugin now includes:
 
 * A namespaced plugin bootstrap and lifecycle handlers
 * Minimum PHP and WordPress version checks during activation
@@ -382,13 +382,57 @@ The AI engine requires IDs `idea-1` through `idea-5`, exactly five items, unique
 
 Generated ideas are stored for 20 minutes in `aics_blog_ideas_{user_id}` only after complete validation. New generation replaces old ideas only after success and clears the prior selection. Selection submits only a stored idea ID, reloads the server-side idea list, and copies the matching idea into `aics_selected_blog_idea_{user_id}` for 20 minutes. No API key, authorization header, raw response, or complete prompt is stored in idea state.
 
+Task 6 added complete editable article-draft generation without WordPress post creation:
+
+* `includes/services/class-post-generator.php` sanitizes and validates generated and manually edited article fields for future post creation.
+* `includes/ai/class-ai-request.php` now accepts the `article_draft` task and its larger bounded output-token budget.
+* `includes/ai/class-prompt-engine.php` builds the article instructions, approximate length guidance, and strict title/content/excerpt schema.
+* `includes/ai/class-ai-engine.php` orchestrates article requests and requires `AICS_Post_Generator` validation before returning success.
+* `includes/providers/class-openai-provider.php` supports `article_draft` through the existing generation method and Responses API path, with a bounded 30-second article timeout.
+* `includes/admin/class-content-studio-page.php` adds protected generate and save actions, temporary draft state, the selected-idea summary, editable fields, `wp_editor()`, regeneration, and controlled notices.
+* `ai-content-studio.php` loads the post-generator service before the AI engine.
+* `assets/css/admin.css` adds scoped article-editor styling.
+* `assets/js/admin.js` adds article generation double-submit prevention and a best-effort unsaved-edit warning for title, excerpt, Text mode, and TinyMCE Visual mode.
+* `AI_CONTEXT.md` documents the completed task.
+
+The article structured response requires separate `title`, `content`, and `excerpt` strings. Title is plain text with a 250-character limit; excerpt is plain text with a 500-character limit. Content must contain meaningful text, is limited to 100,000 characters, and is filtered through an article-specific `wp_kses()` allowlist containing only `p`, `h2`, `h3`, `h4`, `ul`, `ol`, `li`, `strong`, `em`, `blockquote`, and `a`. Links may retain only safe `href` and `title` attributes. Scripts, styles, iframes, forms, event handlers, inline CSS, arbitrary attributes, and unsafe URL protocols are removed.
+
+Sanitized article drafts are stored for 45 minutes in `aics_article_draft_{user_id}` with the selected idea ID, generation and update timestamps, model, tone, and requested length. Successful article generation refreshes the trusted input and selection lifetimes. Manual saves preserve generation metadata and update only sanitized editable fields plus `updated_at`. Selecting a different idea, validating new inputs, or successfully generating new ideas clears an incompatible draft. Failed generation never replaces the previous draft.
+
+The editor and regeneration forms are separate and never nested. Regeneration uses trusted server-side inputs and the selected idea, sends no current draft back to OpenAI, asks for confirmation, and replaces state only after full validation. No `wp_insert_post()` call or permanent article storage exists.
+
+Task 7 added native WordPress draft creation from the reviewed temporary article:
+
+* `includes/services/class-post-generator.php` now revalidates reviewed article data and exclusively owns native post creation through `wp_insert_post()`.
+* `includes/admin/class-content-studio-page.php` registers the protected `aics_create_wordpress_draft` action, loads only trusted user-scoped state, prevents duplicates, stores the created post association, and renders the result panel.
+* `assets/css/admin.css` adds scoped styling for the draft-creation action and result panel.
+* `assets/js/admin.js` disables the creation button after submission as a usability safeguard; server-side duplicate checks remain authoritative.
+* `AI_CONTEXT.md` documents the completed task.
+
+The service hardcodes `post_type` to `post` and `post_status` to `draft`, uses the current authenticated user as `post_author`, and passes the temporary article through the existing title, excerpt, content-length, meaningful-content, and strict `wp_kses()` validation again before insertion. The browser submits only an action and dedicated nonce; it does not submit article fields in the creation form. Automatic publishing is impossible through this action.
+
+After successful creation, the article transient stores `created_post_id` and `created_post_at`. Duplicate prevention checks that user-scoped association and confirms either the private plugin marker and creating-user metadata or, as a metadata-failure fallback, the trusted workflow timestamp and matching post author. Existing non-trashed associated posts are reused and no second post is inserted. Deleted, trashed, or invalid associations are cleared without deleting any WordPress post, allowing a new draft to be created.
+
+Created posts receive these sanitized private metadata fields:
+
+* `_aics_generated_post`
+* `_aics_source_idea_id`
+* `_aics_primary_keyword`
+* `_aics_search_intent`
+* `_aics_requested_tone`
+* `_aics_requested_length`
+* `_aics_created_by_user`
+* `_aics_generation_timestamp`
+
+No API key, authorization header, business context, full prompt, or raw provider response is stored in post meta. Optional metadata failure does not delete a successfully created post; the post ID remains in workflow state and a controlled warning is shown. Edit links are rendered only after `current_user_can( 'edit_post', $post_id )` succeeds.
+
 ## Current Task Boundary
 
-Task 5 adds only structured blog-idea generation, validation, temporary display, and selection. It adds no full article generation, article editor, post creation, publishing, SEO metadata, images, social content, usage or content-history tables, streaming, AJAX, REST endpoints, background jobs, editable prompt templates, additional providers, model discovery, API-key encryption, or raw prompt logging.
+Task 7 adds only creation of a standard WordPress draft post from the reviewed temporary article, its minimal private association metadata, duplicate prevention, and edit/view links. It adds no publishing, scheduling, categories, tags, featured images, SEO metadata, post updates, synchronization, content-history tables, usage tables, custom post types, REST or AJAX endpoints, background processing, or provider changes.
 
-Current limitations: validated inputs, generated ideas, and selected ideas expire after 20 minutes. Generation is synchronous and depends on the selected account-accessible model returning a conforming structured response. The API key remains unencrypted in WordPress option storage, and no article-generation workflow exists.
+Current limitations: the created WordPress post is independent after insertion; later temporary edits do not update it. Workflow associations expire with the 45-minute article transient. If the association expires, the plugin cannot use workflow state to prevent intentional creation from a newly generated workflow. Draft creation is synchronous and supports only the standard `post` post type.
 
-The next planned task is generating a complete editable article draft from the selected idea. It has not begun.
+The next planned task is workflow reset and the content-history foundation. It has not begun.
 
 ## Important Instruction for Codex
 

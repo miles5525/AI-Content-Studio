@@ -30,11 +30,11 @@ final class AICS_AI_Request {
 	 * @throws InvalidArgumentException When required values are invalid.
 	 */
 	public function __construct( string $task_type, string $system_instructions, string $user_prompt, int $max_output_tokens, array $structured_output_schema ) {
-		if ( 'blog_ideas' !== $task_type || '' === trim( $system_instructions ) || '' === trim( $user_prompt ) ) {
+		if ( ! in_array( $task_type, array( 'blog_ideas', 'article_draft' ), true ) || '' === trim( $system_instructions ) || '' === trim( $user_prompt ) ) {
 			throw new InvalidArgumentException( 'Invalid AI request input.' );
 		}
 
-		if ( $max_output_tokens < 1 || $max_output_tokens > 4000 || empty( $structured_output_schema ) ) {
+		if ( $max_output_tokens < 1 || $max_output_tokens > 10000 || empty( $structured_output_schema ) ) {
 			throw new InvalidArgumentException( 'Invalid AI request limits or schema.' );
 		}
 

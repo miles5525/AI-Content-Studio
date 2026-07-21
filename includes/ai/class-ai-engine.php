@@ -16,10 +16,12 @@ final class AICS_AI_Engine {
 	private const SEARCH_INTENTS = array( 'informational', 'commercial', 'transactional', 'navigational' );
 	private AICS_Provider_Interface $provider;
 	private AICS_Prompt_Engine $prompt_engine;
+	private AICS_Post_Generator $post_generator;
 
-	public function __construct( ?AICS_Provider_Interface $provider = null, ?AICS_Prompt_Engine $prompt_engine = null ) {
+	public function __construct( ?AICS_Provider_Interface $provider = null, ?AICS_Prompt_Engine $prompt_engine = null, ?AICS_Post_Generator $post_generator = null ) {
 		$this->provider      = $provider ?? new AICS_OpenAI_Provider();
 		$this->prompt_engine = $prompt_engine ?? new AICS_Prompt_Engine();
+		$this->post_generator = $post_generator ?? new AICS_Post_Generator();
 	}
 
 	/**
@@ -57,6 +59,47 @@ final class AICS_AI_Engine {
 	}
 
 	/**
+	 * Generates and validates a complete structured article draft.
+	 *
+	 * @param array<string,mixed> $content_inputs Validated Content Studio state.
+	 * @param array<string,mixed> $selected_idea Selected server-side idea.
+	 * @return AICS_AI_Response
+	 */
+	public function generate_article_draft( array $content_inputs, array $selected_idea ): AICS_AI_Response {
+		$inputs = $this->validate_inputs( $content_inputs );
+		$idea   = $this->validate_selected_idea( $selected_idea );
+
+		if ( null === $inputs ) {
+			return AICS_AI_Response::failure( 'invalid-content-inputs', __( 'Content inputs are missing or invalid.', 'ai-content-studio' ) );
+		}
+
+		if ( null === $idea ) {
+			return AICS_AI_Response::failure( 'selected-idea-missing', __( 'The selected blog idea is missing or invalid.', 'ai-content-studio' ) );
+		}
+
+		try {
+			$request = $this->prompt_engine->create_article_draft_request( $inputs, $idea );
+		} catch ( InvalidArgumentException $exception ) {
+			return AICS_AI_Response::failure( 'invalid-article-request', __( 'The article request could not be prepared.', 'ai-content-studio' ) );
+		}
+
+		$response = $this->provider->generate( $request );
+
+		if ( ! $response->is_success() ) {
+			return $response;
+		}
+
+		$data    = $response->get_data();
+		$article = $this->post_generator->prepare_generated_article( is_array( $data ) ? $data : array() );
+
+		if ( is_wp_error( $article ) ) {
+			return AICS_AI_Response::failure( $article->get_error_code(), __( 'OpenAI returned an invalid article format.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+		}
+
+		return AICS_AI_Response::success( $article, __( 'Article draft generated successfully.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
+	}
+
+	/**
 	 * @param array<string,mixed> $inputs Candidate inputs.
 	 * @return array{business_context:string,topic_keyword:string,tone:string,article_length:string}|null
 	 */
@@ -78,6 +121,32 @@ final class AICS_AI_Engine {
 			'topic_keyword'    => $inputs['topic_keyword'],
 			'tone'             => $inputs['tone'],
 			'article_length'   => $inputs['article_length'],
+		);
+	}
+
+	/**
+	 * @param array<string,mixed> $idea Candidate selected idea.
+	 * @return array{id:string,title:string,description:string,primary_keyword:string,search_intent:string}|null
+	 */
+	private function validate_selected_idea( array $idea ): ?array {
+		$required = array( 'id', 'title', 'description', 'primary_keyword', 'search_intent' );
+
+		foreach ( $required as $key ) {
+			if ( ! isset( $idea[ $key ] ) || ! is_string( $idea[ $key ] ) || '' === trim( $idea[ $key ] ) ) {
+				return null;
+			}
+		}
+
+		if ( ! in_array( $idea['id'], array( 'idea-1', 'idea-2', 'idea-3', 'idea-4', 'idea-5' ), true ) || ! in_array( $idea['search_intent'], self::SEARCH_INTENTS, true ) ) {
+			return null;
+		}
+
+		return array(
+			'id'              => $idea['id'],
+			'title'           => $idea['title'],
+			'description'     => $idea['description'],
+			'primary_keyword' => $idea['primary_keyword'],
+			'search_intent'   => $idea['search_intent'],
 		);
 	}
 

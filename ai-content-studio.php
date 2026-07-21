@@ -31,6 +31,7 @@ require_once AICS_PLUGIN_DIR . 'includes/core/class-permissions.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-installer.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-settings.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-http-client.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-ai-request.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-ai-response.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-prompt-engine.php';

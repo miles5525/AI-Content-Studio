@@ -129,3 +129,60 @@
 	border-left: 4px solid #2271b1;
 	background: #f0f6fc;
 }
+
+.aics-article-section {
+	max-width: 900px;
+	margin-top: 24px;
+	padding: 20px 24px;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+}
+
+.aics-article-section > h2 {
+	margin-top: 0;
+}
+
+.aics-selected-idea-summary {
+	margin-bottom: 18px;
+	padding: 14px 16px;
+	border-left: 4px solid #2271b1;
+	background: #f0f6fc;
+}
+
+.aics-selected-idea-summary h3,
+.aics-selected-idea-summary p:first-of-type {
+	margin-top: 0;
+}
+
+.aics-article-editor {
+	margin-top: 16px;
+}
+
+.aics-article-editor > label {
+	display: inline-block;
+	margin-bottom: 6px;
+}
+
+.aics-regenerate-article-form {
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+}
+
+.aics-wordpress-draft-action,
+.aics-wordpress-draft-result {
+	margin-top: 20px;
+	padding: 18px;
+	border: 1px solid #c3c4c7;
+	border-left: 4px solid #2271b1;
+	background: #f6f7f7;
+}
+
+.aics-wordpress-draft-action h3,
+.aics-wordpress-draft-result h3 {
+	margin-top: 0;
+}
+
+.aics-wordpress-draft-result .button + .button {
+	margin-left: 8px;
+}

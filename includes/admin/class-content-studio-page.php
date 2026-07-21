@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Manages Content Studio inputs and blog ideas without generating articles.
+ * Manages the administrator's Content Studio workflow.
  */
 final class AICS_Content_Studio_Page {
 	private const PAGE_SLUG = 'aics-create-content';
@@ -20,8 +20,15 @@ final class AICS_Content_Studio_Page {
 	private const GENERATE_NONCE_NAME = 'aics_generate_ideas_nonce';
 	private const SELECT_ACTION = 'aics_select_blog_idea';
 	private const SELECT_NONCE_NAME = 'aics_select_idea_nonce';
+	private const GENERATE_ARTICLE_ACTION = 'aics_generate_article_draft';
+	private const GENERATE_ARTICLE_NONCE_NAME = 'aics_generate_article_nonce';
+	private const SAVE_ARTICLE_ACTION = 'aics_save_article_draft';
+	private const SAVE_ARTICLE_NONCE_NAME = 'aics_save_article_nonce';
+	private const CREATE_DRAFT_ACTION = 'aics_create_wordpress_draft';
+	private const CREATE_DRAFT_NONCE_NAME = 'aics_create_wordpress_draft_nonce';
 	private const STATE_TTL = 20 * MINUTE_IN_SECONDS;
 	private const ERROR_STATE_TTL = 5 * MINUTE_IN_SECONDS;
+	private const ARTICLE_STATE_TTL = 45 * MINUTE_IN_SECONDS;
 	private const BUSINESS_CONTEXT_MAX_LENGTH = 3000;
 	private const TOPIC_MAX_LENGTH = 250;
 	private const TONES = array(
@@ -46,6 +53,9 @@ final class AICS_Content_Studio_Page {
 		add_action( 'admin_post_' . self::ACTION, array( self::class, 'handle_submission' ) );
 		add_action( 'admin_post_' . self::GENERATE_ACTION, array( self::class, 'handle_generate_ideas' ) );
 		add_action( 'admin_post_' . self::SELECT_ACTION, array( self::class, 'handle_select_idea' ) );
+		add_action( 'admin_post_' . self::GENERATE_ARTICLE_ACTION, array( self::class, 'handle_generate_article' ) );
+		add_action( 'admin_post_' . self::SAVE_ARTICLE_ACTION, array( self::class, 'handle_save_article' ) );
+		add_action( 'admin_post_' . self::CREATE_DRAFT_ACTION, array( self::class, 'handle_create_wordpress_draft' ) );
 	}
 
 	/**
@@ -60,6 +70,7 @@ final class AICS_Content_Studio_Page {
 		$validated_inputs = self::get_validated_input_state();
 		$idea_state       = self::get_idea_state();
 		$selected_idea    = self::get_selected_idea();
+		$article_draft    = self::get_article_draft();
 		?>
 		<div class="wrap aics-admin-wrap aics-content-studio-page">
 			<h1><?php esc_html_e( 'AI Content Studio', 'ai-content-studio' ); ?></h1>
@@ -125,6 +136,7 @@ final class AICS_Content_Studio_Page {
 			</form>
 
 			<?php self::render_blog_ideas( $validated_inputs, $idea_state, $selected_idea ); ?>
+			<?php self::render_article_draft( $validated_inputs, $selected_idea, $article_draft ); ?>
 		</div>
 		<?php
 	}
@@ -161,6 +173,7 @@ final class AICS_Content_Studio_Page {
 		delete_transient( self::get_error_state_key() );
 		delete_transient( self::get_ideas_state_key() );
 		delete_transient( self::get_selected_idea_key() );
+		delete_transient( self::get_article_draft_key() );
 		self::redirect( 'inputs-validated' );
 	}
 
@@ -209,6 +222,7 @@ final class AICS_Content_Studio_Page {
 			self::STATE_TTL
 		);
 		delete_transient( self::get_selected_idea_key() );
+		delete_transient( self::get_article_draft_key() );
 		self::redirect( 'ideas-generated' );
 	}
 
@@ -241,8 +255,179 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'invalid-selected-idea' );
 		}
 
+		$current_selection = self::get_selected_idea();
+
+		if ( null === $current_selection || $current_selection['id'] !== $match['id'] ) {
+			delete_transient( self::get_article_draft_key() );
+		}
+
 		set_transient( self::get_selected_idea_key(), $match, self::STATE_TTL );
 		self::redirect( 'idea-selected' );
+	}
+
+	/**
+	 * Generates a sanitized article draft from trusted temporary state.
+	 *
+	 * @return void
+	 */
+	public static function handle_generate_article(): void {
+		self::require_permission();
+
+		if ( ! self::verify_nonce( self::GENERATE_ARTICLE_NONCE_NAME, self::GENERATE_ARTICLE_ACTION ) ) {
+			self::redirect( 'request-not-verified' );
+		}
+
+		if ( ! AICS_Settings::has_openai_api_key() ) {
+			self::redirect( 'missing-api-key' );
+		}
+
+		$inputs        = self::get_validated_input_state();
+		$selected_idea = self::get_selected_idea();
+
+		if ( null === $inputs ) {
+			self::redirect( 'inputs-missing' );
+		}
+
+		if ( null === $selected_idea ) {
+			self::redirect( 'selected-idea-missing' );
+		}
+
+		$engine   = new AICS_AI_Engine();
+		$response = $engine->generate_article_draft( $inputs, $selected_idea );
+
+		if ( ! $response->is_success() ) {
+			self::redirect( self::map_article_generation_notice( $response->get_error_code() ) );
+		}
+
+		$article = $response->get_data();
+
+		if ( null === $article ) {
+			self::redirect( 'invalid-article-format' );
+		}
+
+		$timestamp = current_time( 'timestamp', true );
+		set_transient( self::get_state_key(), $inputs, self::ARTICLE_STATE_TTL );
+		set_transient( self::get_selected_idea_key(), $selected_idea, self::ARTICLE_STATE_TTL );
+		set_transient(
+			self::get_article_draft_key(),
+			array_merge(
+				$article,
+				array(
+					'idea_id'      => $selected_idea['id'],
+					'generated_at' => $timestamp,
+					'updated_at'   => $timestamp,
+					'model'        => AICS_Settings::get_openai_model(),
+					'tone'         => $inputs['tone'],
+					'length'       => $inputs['article_length'],
+				)
+			),
+			self::ARTICLE_STATE_TTL
+		);
+		self::redirect( 'article-generated' );
+	}
+
+	/**
+	 * Saves a manually edited temporary article draft.
+	 *
+	 * @return void
+	 */
+	public static function handle_save_article(): void {
+		self::require_permission();
+
+		if ( ! self::verify_nonce( self::SAVE_ARTICLE_NONCE_NAME, self::SAVE_ARTICLE_ACTION ) ) {
+			self::redirect( 'request-not-verified' );
+		}
+
+		$selected_idea = self::get_selected_idea();
+		$current_draft = self::get_article_draft();
+
+		if ( null === $selected_idea || null === $current_draft || $current_draft['idea_id'] !== $selected_idea['id'] ) {
+			self::redirect( 'selected-idea-missing' );
+		}
+
+		$title   = isset( $_POST['article_title'] ) && is_string( $_POST['article_title'] ) ? wp_unslash( $_POST['article_title'] ) : '';
+		$excerpt = isset( $_POST['article_excerpt'] ) && is_string( $_POST['article_excerpt'] ) ? wp_unslash( $_POST['article_excerpt'] ) : '';
+		$content = isset( $_POST['article_content'] ) && is_string( $_POST['article_content'] ) ? wp_unslash( $_POST['article_content'] ) : '';
+		$article = ( new AICS_Post_Generator() )->prepare_edited_article( $title, $excerpt, $content );
+
+		if ( is_wp_error( $article ) ) {
+			self::redirect( self::map_article_validation_notice( $article->get_error_code() ) );
+		}
+
+		$updated_draft               = array_merge( $current_draft, $article );
+		$updated_draft['updated_at'] = current_time( 'timestamp', true );
+		$inputs = self::get_validated_input_state();
+
+		if ( null !== $inputs ) {
+			set_transient( self::get_state_key(), $inputs, self::ARTICLE_STATE_TTL );
+		}
+
+		set_transient( self::get_selected_idea_key(), $selected_idea, self::ARTICLE_STATE_TTL );
+		set_transient( self::get_article_draft_key(), $updated_draft, self::ARTICLE_STATE_TTL );
+		self::redirect( 'article-saved' );
+	}
+
+	/**
+	 * Creates a native WordPress draft from trusted temporary workflow state.
+	 *
+	 * @return void
+	 */
+	public static function handle_create_wordpress_draft(): void {
+		self::require_permission();
+
+		if ( ! is_user_logged_in() || ! current_user_can( 'edit_posts' ) ) {
+			self::redirect( 'draft-creation-not-allowed' );
+		}
+
+		if ( ! self::verify_nonce( self::CREATE_DRAFT_NONCE_NAME, self::CREATE_DRAFT_ACTION ) ) {
+			self::redirect( 'request-not-verified' );
+		}
+
+		$article_draft = self::get_article_draft();
+
+		if ( null === $article_draft ) {
+			self::redirect( 'article-draft-missing' );
+		}
+
+		$had_association = absint( $article_draft['created_post_id'] ?? 0 ) > 0;
+		$existing_post   = self::get_associated_post( $article_draft );
+
+		if ( null !== $existing_post ) {
+			self::redirect( 'wordpress-draft-already-exists' );
+		}
+
+		if ( $had_association ) {
+			self::redirect( 'associated-draft-missing' );
+		}
+
+		$generator = new AICS_Post_Generator();
+		$article   = $generator->prepare_generated_article( $article_draft );
+
+		if ( is_wp_error( $article ) ) {
+			self::redirect( 'invalid-article-draft' );
+		}
+
+		$selected_idea = self::get_selected_idea();
+		$inputs        = self::get_validated_input_state();
+		$context       = array(
+			'idea_id'         => $article_draft['idea_id'],
+			'primary_keyword' => null !== $selected_idea ? $selected_idea['primary_keyword'] : '',
+			'search_intent'   => null !== $selected_idea ? $selected_idea['search_intent'] : '',
+			'tone'            => null !== $inputs ? $inputs['tone'] : $article_draft['tone'],
+			'length'          => null !== $inputs ? $inputs['article_length'] : $article_draft['length'],
+			'generated_at'    => $article_draft['generated_at'],
+		);
+		$result        = $generator->create_wordpress_draft( $article, $context );
+
+		if ( ! $result['success'] ) {
+			self::redirect( in_array( $result['code'], array( 'invalid-article-draft', 'draft-creation-not-allowed' ), true ) ? $result['code'] : 'wordpress-draft-creation-failed' );
+		}
+
+		$article_draft['created_post_id'] = absint( $result['post_id'] );
+		$article_draft['created_post_at'] = current_time( 'timestamp', true );
+		set_transient( self::get_article_draft_key(), $article_draft, self::ARTICLE_STATE_TTL );
+
+		self::redirect( 'wordpress-draft-created-meta-warning' === $result['code'] ? $result['code'] : 'wordpress-draft-created' );
 	}
 
 	/**
@@ -414,6 +599,68 @@ final class AICS_Content_Studio_Page {
 	}
 
 	/**
+	 * Returns the current user's sanitized temporary article draft.
+	 *
+	 * @return array|null
+	 */
+	private static function get_article_draft(): ?array {
+		$draft = get_transient( self::get_article_draft_key() );
+		$required = array( 'title', 'content', 'excerpt', 'idea_id', 'generated_at', 'updated_at', 'model', 'tone', 'length' );
+
+		if ( ! is_array( $draft ) ) {
+			return null;
+		}
+
+		foreach ( $required as $key ) {
+			if ( ! array_key_exists( $key, $draft ) ) {
+				return null;
+			}
+		}
+
+		foreach ( array( 'title', 'content', 'excerpt', 'idea_id', 'model', 'tone', 'length' ) as $key ) {
+			if ( ! is_string( $draft[ $key ] ) ) {
+				return null;
+			}
+		}
+
+		return $draft;
+	}
+
+	/**
+	 * Returns a valid post associated with this user's current article workflow.
+	 *
+	 * Invalid, deleted, trashed, or unmarked associations are cleared without
+	 * deleting the WordPress post.
+	 *
+	 * @param array<string,mixed> $article_draft Current temporary article state.
+	 * @return WP_Post|null
+	 */
+	private static function get_associated_post( array &$article_draft ): ?WP_Post {
+		$post_id = absint( $article_draft['created_post_id'] ?? 0 );
+
+		if ( $post_id < 1 ) {
+			return null;
+		}
+
+		$post            = get_post( $post_id );
+		$is_aics_post    = '1' === (string) get_post_meta( $post_id, '_aics_generated_post', true );
+		$is_same_user    = get_current_user_id() === absint( get_post_meta( $post_id, '_aics_created_by_user', true ) );
+		$is_state_owned  = $post instanceof WP_Post
+			&& isset( $article_draft['created_post_at'] )
+			&& absint( $article_draft['created_post_at'] ) > 0
+			&& get_current_user_id() === (int) $post->post_author;
+		$is_associated   = ( $is_aics_post && $is_same_user ) || $is_state_owned;
+
+		if ( ! $post instanceof WP_Post || 'trash' === get_post_status( $post_id ) || ! $is_associated ) {
+			unset( $article_draft['created_post_id'], $article_draft['created_post_at'] );
+			set_transient( self::get_article_draft_key(), $article_draft, self::ARTICLE_STATE_TTL );
+			return null;
+		}
+
+		return $post;
+	}
+
+	/**
 	 * Renders generation controls and sanitized idea cards.
 	 *
 	 * @param array|null $validated_inputs Current validated inputs.
@@ -477,6 +724,134 @@ final class AICS_Content_Studio_Page {
 	}
 
 	/**
+	 * Renders article-generation controls and the editable temporary draft.
+	 *
+	 * @param array|null $validated_inputs Current validated inputs.
+	 * @param array|null $selected_idea    Current selected idea.
+	 * @param array|null $article_draft    Current sanitized draft.
+	 * @return void
+	 */
+	private static function render_article_draft( ?array $validated_inputs, ?array $selected_idea, ?array $article_draft ): void {
+		if ( null === $selected_idea ) {
+			return;
+		}
+
+		if ( null !== $article_draft && $article_draft['idea_id'] !== $selected_idea['id'] ) {
+			$article_draft = null;
+		}
+
+		$key_configured = AICS_Settings::has_openai_api_key();
+		$created_post   = null !== $article_draft ? self::get_associated_post( $article_draft ) : null;
+		?>
+		<section class="aics-article-section" aria-labelledby="aics-article-heading">
+			<h2 id="aics-article-heading"><?php esc_html_e( 'Article Draft', 'ai-content-studio' ); ?></h2>
+			<div class="aics-selected-idea-summary">
+				<h3><?php esc_html_e( 'Selected Idea', 'ai-content-studio' ); ?></h3>
+				<p><strong><?php echo esc_html( $selected_idea['title'] ); ?></strong></p>
+				<p><?php echo esc_html( $selected_idea['description'] ); ?></p>
+			</div>
+
+			<?php if ( null === $article_draft ) : ?>
+				<p><?php esc_html_e( 'Generate an editable temporary draft. This action does not create or publish a WordPress post.', 'ai-content-studio' ); ?></p>
+				<?php if ( null === $validated_inputs ) : ?>
+					<p><?php esc_html_e( 'Content inputs are missing or expired. Validate the Content Inputs form again before generating an article.', 'ai-content-studio' ); ?></p>
+				<?php elseif ( $key_configured ) : ?>
+					<form class="aics-generate-article-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-generating-label="<?php echo esc_attr__( 'Generating…', 'ai-content-studio' ); ?>">
+						<input type="hidden" name="action" value="<?php echo esc_attr( self::GENERATE_ARTICLE_ACTION ); ?>">
+						<?php wp_nonce_field( self::GENERATE_ARTICLE_ACTION, self::GENERATE_ARTICLE_NONCE_NAME ); ?>
+						<?php submit_button( __( 'Generate Article Draft', 'ai-content-studio' ), 'primary', 'submit', false ); ?>
+					</form>
+				<?php else : ?>
+					<p><a href="<?php echo esc_url( admin_url( 'admin.php?page=aics-settings' ) ); ?>"><?php esc_html_e( 'Configure an OpenAI API key in Settings.', 'ai-content-studio' ); ?></a></p>
+				<?php endif; ?>
+			<?php else : ?>
+				<form class="aics-article-draft-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-draft-form>
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ARTICLE_ACTION ); ?>">
+					<?php wp_nonce_field( self::SAVE_ARTICLE_ACTION, self::SAVE_ARTICLE_NONCE_NAME ); ?>
+					<p>
+						<label for="aics-article-title"><strong><?php esc_html_e( 'Article Title', 'ai-content-studio' ); ?></strong></label><br>
+						<input id="aics-article-title" class="large-text" type="text" name="article_title" value="<?php echo esc_attr( $article_draft['title'] ); ?>" maxlength="250" required data-aics-draft-field>
+					</p>
+					<p>
+						<label for="aics-article-excerpt"><strong><?php esc_html_e( 'Article Excerpt', 'ai-content-studio' ); ?></strong></label><br>
+						<textarea id="aics-article-excerpt" class="large-text" name="article_excerpt" rows="4" maxlength="500" required data-aics-draft-field><?php echo esc_textarea( $article_draft['excerpt'] ); ?></textarea>
+					</p>
+					<div class="aics-article-editor">
+						<label for="aics_article_content_editor"><strong><?php esc_html_e( 'Article Content', 'ai-content-studio' ); ?></strong></label>
+						<?php
+						wp_editor(
+							$article_draft['content'],
+							'aics_article_content_editor',
+							array(
+								'media_buttons' => false,
+								'teeny'         => false,
+								'quicktags'     => true,
+								'textarea_name' => 'article_content',
+								'textarea_rows' => 24,
+							)
+						);
+						?>
+					</div>
+					<?php submit_button( __( 'Save Edited Draft', 'ai-content-studio' ) ); ?>
+				</form>
+
+				<?php if ( null !== $validated_inputs ) : ?>
+					<form class="aics-generate-article-form aics-regenerate-article-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-confirm="<?php echo esc_attr__( 'Regeneration will replace the current article only if the new generation succeeds. Continue?', 'ai-content-studio' ); ?>" data-aics-generating-label="<?php echo esc_attr__( 'Generating…', 'ai-content-studio' ); ?>">
+						<input type="hidden" name="action" value="<?php echo esc_attr( self::GENERATE_ARTICLE_ACTION ); ?>">
+						<?php wp_nonce_field( self::GENERATE_ARTICLE_ACTION, self::GENERATE_ARTICLE_NONCE_NAME ); ?>
+						<?php submit_button( __( 'Regenerate Article', 'ai-content-studio' ), 'secondary', 'submit', false ); ?>
+					</form>
+				<?php else : ?>
+					<p class="description"><?php esc_html_e( 'The current draft remains editable, but regeneration requires unexpired validated inputs.', 'ai-content-studio' ); ?></p>
+				<?php endif; ?>
+
+				<?php self::render_wordpress_draft_action( $article_draft, $created_post ); ?>
+			<?php endif; ?>
+		</section>
+		<?php
+	}
+
+	/**
+	 * Renders native WordPress draft creation or the associated-draft result.
+	 *
+	 * @param array<string,mixed> $article_draft Current temporary article draft.
+	 * @param WP_Post|null        $created_post  Valid associated WordPress post.
+	 * @return void
+	 */
+	private static function render_wordpress_draft_action( array $article_draft, ?WP_Post $created_post ): void {
+		if ( null !== $created_post ) {
+			$edit_link = current_user_can( 'edit_post', $created_post->ID ) ? get_edit_post_link( $created_post->ID, '' ) : '';
+			?>
+			<div class="aics-wordpress-draft-result">
+				<h3><?php esc_html_e( 'WordPress Draft Created', 'ai-content-studio' ); ?></h3>
+				<p><strong><?php esc_html_e( 'Post title:', 'ai-content-studio' ); ?></strong> <?php echo esc_html( get_the_title( $created_post ) ); ?></p>
+				<p><strong><?php esc_html_e( 'Status:', 'ai-content-studio' ); ?></strong> <?php echo esc_html( ucfirst( get_post_status( $created_post ) ) ); ?></p>
+				<?php if ( is_string( $edit_link ) && '' !== $edit_link ) : ?>
+					<a class="button button-primary" href="<?php echo esc_url( $edit_link ); ?>"><?php esc_html_e( 'Edit Draft', 'ai-content-studio' ); ?></a>
+				<?php endif; ?>
+				<a class="button" href="<?php echo esc_url( admin_url( 'edit.php' ) ); ?>"><?php esc_html_e( 'View Posts', 'ai-content-studio' ); ?></a>
+			</div>
+			<?php
+			return;
+		}
+		?>
+		<div class="aics-wordpress-draft-action">
+			<h3><?php esc_html_e( 'Create WordPress Draft', 'ai-content-studio' ); ?></h3>
+			<p><?php esc_html_e( 'The reviewed article will be saved as a WordPress draft. It will not be published automatically and can be reviewed further in the WordPress editor.', 'ai-content-studio' ); ?></p>
+			<?php if ( current_user_can( 'edit_posts' ) ) : ?>
+				<form class="aics-create-wordpress-draft-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-creating-label="<?php echo esc_attr__( 'Creating Draft...', 'ai-content-studio' ); ?>">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::CREATE_DRAFT_ACTION ); ?>">
+					<?php wp_nonce_field( self::CREATE_DRAFT_ACTION, self::CREATE_DRAFT_NONCE_NAME ); ?>
+					<?php submit_button( __( 'Create WordPress Draft', 'ai-content-studio' ), 'primary', 'submit', false ); ?>
+				</form>
+			<?php else : ?>
+				<p><?php esc_html_e( 'You are not allowed to create posts.', 'ai-content-studio' ); ?></p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Verifies a dedicated scalar nonce value.
 	 *
 	 * @param string $nonce_name Nonce field name.
@@ -499,6 +874,34 @@ final class AICS_Content_Studio_Page {
 		$allowed = array( 'missing-api-key', 'invalid-api-key', 'quota-error', 'rate-limit', 'model-unavailable', 'network-error', 'invalid-idea-format' );
 
 		return in_array( $error_code, $allowed, true ) ? $error_code : 'generation-failed';
+	}
+
+	/**
+	 * Maps article-generation errors to fixed notice codes.
+	 *
+	 * @param string $error_code AI response error code.
+	 * @return string
+	 */
+	private static function map_article_generation_notice( string $error_code ): string {
+		$allowed = array( 'missing-api-key', 'invalid-api-key', 'quota-error', 'rate-limit', 'model-unavailable', 'network-error', 'article-title-required', 'article-title-too-long', 'article-excerpt-required', 'article-excerpt-too-long', 'article-content-required', 'article-content-too-large' );
+
+		if ( in_array( $error_code, $allowed, true ) ) {
+			return $error_code;
+		}
+
+		return 'invalid-article-format' === $error_code ? $error_code : 'article-generation-failed';
+	}
+
+	/**
+	 * Maps manual-edit validation errors to fixed notice codes.
+	 *
+	 * @param string $error_code Validation error code.
+	 * @return string
+	 */
+	private static function map_article_validation_notice( string $error_code ): string {
+		$allowed = array( 'article-title-required', 'article-title-too-long', 'article-excerpt-required', 'article-excerpt-too-long', 'article-content-required', 'article-content-too-large' );
+
+		return in_array( $error_code, $allowed, true ) ? $error_code : 'invalid-article-format';
 	}
 
 	/**
@@ -529,6 +932,25 @@ final class AICS_Content_Studio_Page {
 			'network-error'              => array( 'error', __( 'The site could not connect to OpenAI.', 'ai-content-studio' ) ),
 			'invalid-idea-format'        => array( 'error', __( 'OpenAI returned an invalid idea format.', 'ai-content-studio' ) ),
 			'invalid-selected-idea'      => array( 'error', __( 'The selected idea is invalid or expired.', 'ai-content-studio' ) ),
+			'article-generated'          => array( 'success', __( 'Article draft generated successfully.', 'ai-content-studio' ) ),
+			'article-saved'              => array( 'success', __( 'Article draft saved successfully.', 'ai-content-studio' ) ),
+			'selected-idea-missing'      => array( 'error', __( 'The selected blog idea is missing or expired.', 'ai-content-studio' ) ),
+			'article-generation-failed'  => array( 'error', __( 'Article generation failed. The previous draft was preserved.', 'ai-content-studio' ) ),
+			'invalid-article-format'     => array( 'error', __( 'OpenAI returned an invalid article format.', 'ai-content-studio' ) ),
+			'article-title-required'     => array( 'error', __( 'Article title is required.', 'ai-content-studio' ) ),
+			'article-title-too-long'     => array( 'error', __( 'Article title is too long.', 'ai-content-studio' ) ),
+			'article-excerpt-required'   => array( 'error', __( 'Article excerpt is required.', 'ai-content-studio' ) ),
+			'article-excerpt-too-long'   => array( 'error', __( 'Article excerpt is too long.', 'ai-content-studio' ) ),
+			'article-content-required'   => array( 'error', __( 'Article content is required.', 'ai-content-studio' ) ),
+			'article-content-too-large'  => array( 'error', __( 'Article content is too large.', 'ai-content-studio' ) ),
+			'wordpress-draft-created'    => array( 'success', __( 'WordPress draft created successfully.', 'ai-content-studio' ) ),
+			'wordpress-draft-created-meta-warning' => array( 'warning', __( 'The WordPress draft was created, but some association metadata could not be saved.', 'ai-content-studio' ) ),
+			'wordpress-draft-already-exists' => array( 'warning', __( 'A WordPress draft already exists for this article.', 'ai-content-studio' ) ),
+			'article-draft-missing'       => array( 'error', __( 'The article draft is missing or expired.', 'ai-content-studio' ) ),
+			'invalid-article-draft'       => array( 'error', __( 'The article draft is invalid.', 'ai-content-studio' ) ),
+			'wordpress-draft-creation-failed' => array( 'error', __( 'WordPress could not create the draft.', 'ai-content-studio' ) ),
+			'draft-creation-not-allowed'  => array( 'error', __( 'You are not allowed to create posts.', 'ai-content-studio' ) ),
+			'associated-draft-missing'    => array( 'warning', __( 'The previously associated draft no longer exists. You can create a new WordPress draft.', 'ai-content-studio' ) ),
 		);
 
 		if ( ! isset( $notices[ $notice ] ) ) {
@@ -584,6 +1006,15 @@ final class AICS_Content_Studio_Page {
 	 */
 	private static function get_selected_idea_key(): string {
 		return 'aics_selected_blog_idea_' . get_current_user_id();
+	}
+
+	/**
+	 * Returns the current user's temporary article-draft transient key.
+	 *
+	 * @return string
+	 */
+	private static function get_article_draft_key(): string {
+		return 'aics_article_draft_' . get_current_user_id();
 	}
 
 	/**

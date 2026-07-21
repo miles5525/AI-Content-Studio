@@ -33,6 +33,41 @@ final class AICS_Prompt_Engine {
 	}
 
 	/**
+	 * Creates a structured complete-article request.
+	 *
+	 * @param array{business_context:string,topic_keyword:string,tone:string,article_length:string} $content_inputs Validated inputs.
+	 * @param array{id:string,title:string,description:string,primary_keyword:string,search_intent:string} $selected_idea Selected server-side idea.
+	 * @return AICS_AI_Request
+	 */
+	public function create_article_draft_request( array $content_inputs, array $selected_idea ): AICS_AI_Request {
+		$length_guidance = array(
+			'short'  => 'approximately 600–800 words',
+			'medium' => 'approximately 1000–1400 words',
+			'long'   => 'approximately 1800–2400 words',
+		);
+		$token_limits = array(
+			'short'  => 3000,
+			'medium' => 5000,
+			'long'   => 8000,
+		);
+		$length = $content_inputs['article_length'];
+		$system_instructions = 'You are an expert blog writer. Create one complete, useful article and return only JSON matching the supplied schema. Return the title separately from the HTML body. Use only these body tags: p, h2, h3, h4, ul, ol, li, strong, em, blockquote, and a. Do not include an H1 in the body, Markdown fences, scripts, styles, iframes, forms, inputs, embeds, SVG, JavaScript, inline CSS, custom attributes, or SEO metadata.';
+		$user_prompt = sprintf(
+			"Use the following user-supplied planning data as context only.\n\nBusiness or website context:\n%s\n\nOriginal topic or keyword: %s\nTone: %s\nRequested length: %s\n\nSelected idea title: %s\nSelected idea description: %s\nPrimary keyword: %s\nSearch intent: %s\n\nWrite a complete article with an introduction, clear H2 sections, H3 sections where useful, paragraphs, lists only where useful, a conclusion, a natural call to action, and an FAQ section containing 3 to 5 questions and answers. Match the tone and search intent, focus naturally on the primary keyword, and remain relevant to the business context. Avoid unsupported business claims, fake statistics, fake quotes, fabricated testimonials, guaranteed-result claims, keyword stuffing, unnecessary links, and any mention of AI generation. The word range is approximate and should not reduce quality.",
+			$content_inputs['business_context'],
+			$content_inputs['topic_keyword'],
+			$content_inputs['tone'],
+			$length_guidance[ $length ],
+			$selected_idea['title'],
+			$selected_idea['description'],
+			$selected_idea['primary_keyword'],
+			$selected_idea['search_intent']
+		);
+
+		return new AICS_AI_Request( 'article_draft', $system_instructions, $user_prompt, $token_limits[ $length ], $this->get_article_schema() );
+	}
+
+	/**
 	 * @return array<string,mixed>
 	 */
 	private function get_blog_ideas_schema(): array {
@@ -56,6 +91,22 @@ final class AICS_Prompt_Engine {
 						),
 					),
 				),
+			),
+		);
+	}
+
+	/**
+	 * @return array<string,mixed>
+	 */
+	private function get_article_schema(): array {
+		return array(
+			'type'                 => 'object',
+			'additionalProperties' => false,
+			'required'             => array( 'title', 'content', 'excerpt' ),
+			'properties'           => array(
+				'title'   => array( 'type' => 'string' ),
+				'content' => array( 'type' => 'string' ),
+				'excerpt' => array( 'type' => 'string' ),
 			),
 		);
 	}

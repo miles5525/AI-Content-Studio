@@ -80,7 +80,7 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 			return AICS_AI_Response::failure( 'missing-api-key', __( 'No OpenAI API key is configured.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
-		if ( 'blog_ideas' !== $request->get_task_type() ) {
+		if ( ! in_array( $request->get_task_type(), array( 'blog_ideas', 'article_draft' ), true ) ) {
 			return AICS_AI_Response::failure( 'unsupported-task', __( 'The requested AI task is not supported.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
@@ -99,12 +99,13 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 				'text'              => array(
 					'format' => array(
 						'type'   => 'json_schema',
-						'name'   => 'blog_ideas',
+						'name'   => $request->get_task_type(),
 						'strict' => true,
 						'schema' => $request->get_structured_output_schema(),
 					),
 				),
-			)
+			),
+			'article_draft' === $request->get_task_type() ? 30 : 15
 		);
 
 		if ( ! $response['success'] ) {
@@ -116,7 +117,10 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 		$structured_data = $this->extract_structured_output( $response['data'] );
 
 		if ( null === $structured_data ) {
-			return AICS_AI_Response::failure( 'invalid-idea-format', __( 'OpenAI returned an invalid idea format.', 'ai-content-studio' ), $this->get_provider_name(), $response['status_code'] );
+			$error_code = 'article_draft' === $request->get_task_type() ? 'invalid-article-format' : 'invalid-idea-format';
+			$message    = 'article_draft' === $request->get_task_type() ? __( 'OpenAI returned an invalid article format.', 'ai-content-studio' ) : __( 'OpenAI returned an invalid idea format.', 'ai-content-studio' );
+
+			return AICS_AI_Response::failure( $error_code, $message, $this->get_provider_name(), $response['status_code'] );
 		}
 
 		return AICS_AI_Response::success( $structured_data, __( 'OpenAI returned structured content.', 'ai-content-studio' ), $this->get_provider_name(), $response['status_code'] );
