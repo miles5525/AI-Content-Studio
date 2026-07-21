@@ -44,6 +44,7 @@ final class Plugin {
 	 * @return void
 	 */
 	public function run(): void {
+		\AICS_Automation_Scheduler::register();
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 		add_action( 'init', array( 'AIContentStudio\\Database\\Installer', 'maybe_upgrade' ) );
 		add_action( 'aics_cleanup_usage_logs', array( 'AICS_Usage_Logger', 'cleanup' ) );
@@ -57,6 +58,7 @@ final class Plugin {
 			( new Assets() )->register();
 			\AICS_Settings_Page::register();
 			\AICS_Content_Studio_Page::register();
+			\AICS_Automations_Page::register();
 		}
 	}
 

@@ -111,9 +111,49 @@
 		} );
 	}
 
+	function initializeAutomationForm() {
+		var form = document.querySelector( '.aics-automation-form' );
+
+		if ( ! form ) {
+			return;
+		}
+
+		var mode = form.querySelector( '[name="mode"]' );
+		var frequency = form.querySelector( '[name="schedule_settings[frequency]"]' );
+		var publishingMode = form.querySelector( '[name="publishing_settings[publishing_mode]"]' );
+		var approvalSection = form.querySelector( '#aics-approval-heading' ).closest( '.aics-section' );
+		var publishingDays = form.querySelector( '[name="schedule_settings[days_of_week][]"]' ).closest( '.aics-field' );
+		var monthlyDay = form.querySelector( '.aics-monthly-day-field' );
+		var warning = form.querySelector( '.aics-publish-warning' );
+
+		function refreshConditionalFields() {
+			approvalSection.hidden = 'approval' !== mode.value;
+			publishingDays.hidden = 'weekly' !== frequency.value;
+			monthlyDay.hidden = 'monthly' !== frequency.value;
+			warning.hidden = 'publish' !== publishingMode.value;
+		}
+
+		mode.addEventListener( 'change', refreshConditionalFields );
+		frequency.addEventListener( 'change', refreshConditionalFields );
+		publishingMode.addEventListener( 'change', refreshConditionalFields );
+		refreshConditionalFields();
+
+		form.addEventListener( 'submit', function () {
+			var button = form.querySelector( '[type="submit"]' );
+
+			if ( button ) {
+				button.disabled = true;
+			}
+		} );
+	}
+
 	if ( 'loading' === document.readyState ) {
-		document.addEventListener( 'DOMContentLoaded', initializeDraftWarning );
+		document.addEventListener( 'DOMContentLoaded', function () {
+			initializeDraftWarning();
+			initializeAutomationForm();
+		} );
 	} else {
 		initializeDraftWarning();
+		initializeAutomationForm();
 	}
 }() );

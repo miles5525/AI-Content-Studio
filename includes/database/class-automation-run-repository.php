@@ -1,0 +1,94 @@
+<?php
+/**
+ * Automation-run persistence and execution locking.
+ *
+ * @package AIContentStudio
+ */
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+final class AICS_Automation_Run_Repository {
+	private const TRIGGERS=array('scheduled','manual','retry','system');
+	private const STATUSES=array('queued','running','retrying','completed','failed','cancelled');
+	private const ACTIVE=array('queued','running','retrying');
+	private const STEPS=array('pending','generate_ideas','evaluate_ideas','select_ideas','queue_idea','generate_article','validate_article','create_post','schedule_post','publish_post','waiting_idea_approval','waiting_article_approval','waiting_publish_approval','finalize','complete');
+	private const COLUMNS='id,run_uuid,profile_id,active_profile_key,trigger_type,status,current_step,locked_at,lock_expires_at,attempt_count,max_attempts,next_retry_at,last_error_code,started_at,completed_at,created_at,updated_at';
+
+	/** Creates one queued run, enforcing one active run per profile. */
+	public function create_run($profile_id,array $args=array()):array{
+		global $wpdb;$profile_id=absint($profile_id);
+		if(0===$profile_id||null===(new AICS_Automation_Profile_Repository())->get_by_id($profile_id)){return self::result(false,0,'','invalid_profile');}
+		$trigger=self::key($args['trigger_type']??'scheduled');if(!in_array($trigger,self::TRIGGERS,true)){return self::result(false,0,'','invalid_trigger_type');}
+		$max=self::strict_int($args['max_attempts']??3,1,10);if(null===$max){return self::result(false,0,'','invalid_max_attempts');}
+		$active=$this->get_active_run_for_profile($profile_id);if(null!==$active){return self::result(false,$active['id'],'','active_run_exists');}
+		$uuid=wp_generate_uuid4();if(!is_string($uuid)||!wp_is_uuid($uuid,4)){return self::result(false,0,'','uuid_generation_failed');}
+		$now=self::now();$row=array('run_uuid'=>$uuid,'profile_id'=>$profile_id,'active_profile_key'=>$profile_id,'trigger_type'=>$trigger,'status'=>'queued','current_step'=>'pending','lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'attempt_count'=>0,'max_attempts'=>$max,'next_retry_at'=>null,'last_error_code'=>'','started_at'=>null,'completed_at'=>null,'created_at'=>$now,'updated_at'=>$now);
+		$ok=$wpdb->insert($this->table(),$row,array('%s','%d','%d','%s','%s','%s','%s','%s','%s','%d','%d','%s','%s','%s','%s','%s','%s'));
+		if(false===$ok){$active=$this->get_active_run_for_profile($profile_id);return self::result(false,$active['id']??0,'',$active?'active_run_exists':'database_insert_failed');}
+		return self::result(true,(int)$wpdb->insert_id,$uuid,'run_created');
+	}
+
+	public function get_by_id($run_id):?array{global $wpdb;$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE id=%d LIMIT 1",absint($run_id));return $this->normalize($wpdb->get_row($sql,ARRAY_A));}
+	public function get_by_uuid($uuid):?array{global $wpdb;$uuid=is_scalar($uuid)?sanitize_text_field((string)$uuid):'';if(!wp_is_uuid($uuid)){return null;}$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE run_uuid=%s LIMIT 1",$uuid);return $this->normalize($wpdb->get_row($sql,ARRAY_A));}
+	public function get_active_run_for_profile($profile_id):?array{global $wpdb;$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE active_profile_key=%d AND status IN ('queued','running','retrying') LIMIT 1",absint($profile_id));return $this->normalize($wpdb->get_row($sql,ARRAY_A));}
+
+	/** Finds bounded candidates; claim_run remains the atomic ownership boundary. */
+	public function get_claimable_runs($utc_now,array $steps,$limit=1):array{global $wpdb;$now=self::datetime($utc_now);$allowed=array('pending','generate_ideas');$steps=array_values(array_intersect(array_unique(array_map(static fn($v)=>self::key($v),array_filter($steps,'is_scalar'))),$allowed));if(null===$now||empty($steps)){return array();}$limit=max(1,min(10,absint($limit)));$marks=implode(',',array_fill(0,count($steps),'%s'));$values=array_merge(array($now,$now),$steps,array($limit));$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE (status='queued' OR (status='retrying' AND (next_retry_at IS NULL OR next_retry_at<=%s))) AND (lock_token='' OR lock_expires_at IS NULL OR lock_expires_at<=%s) AND attempt_count<max_attempts AND current_step IN ({$marks}) ORDER BY CASE WHEN next_retry_at IS NULL THEN 0 ELSE 1 END ASC,next_retry_at ASC,created_at ASC,id ASC LIMIT %d",$values);return array_values(array_filter(array_map(array($this,'normalize'),$wpdb->get_results($sql,ARRAY_A))));}
+
+	/** Returns a bounded controlled run list without lock tokens. */
+	public function get_runs(array $args=array()):array{
+		global $wpdb;$where=array('1=1');$values=array();
+		if(isset($args['profile_id'])){$where[]='profile_id=%d';$values[]=absint($args['profile_id']);}
+		if(isset($args['status'])&&in_array($args['status'],self::STATUSES,true)){$where[]='status=%s';$values[]=$args['status'];}
+		if(isset($args['trigger_type'])&&in_array($args['trigger_type'],self::TRIGGERS,true)){$where[]='trigger_type=%s';$values[]=$args['trigger_type'];}
+		$order='ASC'===strtoupper((string)($args['order']??'DESC'))?'ASC':'DESC';$allowed=array('id','status','created_at','updated_at','next_retry_at');$orderby=in_array($args['orderby']??'',$allowed,true)?$args['orderby']:'id';$limit=max(1,min(100,absint($args['limit']??20)));$offset=absint($args['offset']??0);$values[]=$limit;$values[]=$offset;
+		$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE ".implode(' AND ',$where)." ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d",$values);return array_values(array_filter(array_map(array($this,'normalize'),$wpdb->get_results($sql,ARRAY_A))));
+	}
+
+	/** Atomically claims a queued or ready retry run and increments attempts once. */
+	public function claim_run($run_id,$lock_ttl=300):array{
+		global $wpdb;$id=absint($run_id);$ttl=self::strict_int($lock_ttl,60,3600);if(0===$id){return self::lock_result(false,0,'','run_not_found');}if(null===$ttl){return self::lock_result(false,$id,'','invalid_lock_ttl');}
+		$token=wp_generate_password(64,false,false);if(64!==strlen($token)){return self::lock_result(false,$id,'','lock_token_generation_failed');}$now=self::now();$expires=self::plus_seconds($now,$ttl);
+		$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='running',lock_token=%s,locked_at=%s,lock_expires_at=%s,attempt_count=attempt_count+1,started_at=COALESCE(started_at,%s),next_retry_at=NULL,updated_at=%s WHERE id=%d AND status IN ('queued','retrying') AND (status='queued' OR next_retry_at IS NULL OR next_retry_at<=%s) AND (lock_token='' OR lock_expires_at IS NULL OR lock_expires_at<=%s) AND attempt_count<max_attempts",$token,$now,$expires,$now,$now,$id,$now,$now);
+		$changed=$wpdb->query($sql);if(1===$changed){return self::lock_result(true,$id,$token,'run_claimed');}
+		$run=$this->get_by_id($id);if(null===$run){return self::lock_result(false,$id,'','run_not_found');}if($run['attempt_count']>=$run['max_attempts']&&in_array($run['status'],array('queued','retrying'),true)){$this->fail_exhausted($id,$now);return self::lock_result(false,$id,'','retries_exhausted');}if('retrying'===$run['status']&&null!==$run['next_retry_at']&&$run['next_retry_at']>$now){return self::lock_result(false,$id,'','run_not_ready');}if('running'===$run['status']){return self::lock_result(false,$id,'','run_locked');}return self::lock_result(false,$id,'','run_not_claimable');
+	}
+
+	public function refresh_lock($run_id,$lock_token,$lock_ttl=300):array{$ttl=self::strict_int($lock_ttl,60,3600);if(null===$ttl){return self::simple(false,$run_id,'invalid_lock_ttl');}$now=self::now();return $this->worker_update($run_id,$lock_token,array('lock_expires_at'=>self::plus_seconds($now,$ttl),'updated_at'=>$now),array('%s','%s'),'lock_refreshed');}
+	public function release_lock($run_id,$lock_token):array{$now=self::now();return $this->worker_update($run_id,$lock_token,array('status'=>'queued','lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'updated_at'=>$now),array('%s','%s','%s','%s','%s'),'lock_released');}
+	public function update_step($run_id,$lock_token,$step):array{$step=self::key($step);if(!in_array($step,self::STEPS,true)||'complete'===$step){return self::simple(false,$run_id,'invalid_workflow_step');}return $this->worker_update($run_id,$lock_token,array('current_step'=>$step,'updated_at'=>self::now()),array('%s','%s'),'step_updated');}
+
+	public function schedule_retry($run_id,$lock_token,$error_code,$retry_at):array{
+		$run=$this->get_by_id($run_id);$error=self::error($error_code);$retry=self::datetime($retry_at);$now=self::now();if(''===$error){return self::simple(false,$run_id,'invalid_error_code');}if(null===$retry||$retry<=$now){return self::simple(false,$run_id,'invalid_retry_datetime');}if(null===$run){return self::simple(false,$run_id,'run_not_found');}if($run['attempt_count']>=$run['max_attempts']){return $this->mark_failed($run_id,$lock_token,'retries_exhausted');}
+		return $this->worker_update($run_id,$lock_token,array('status'=>'retrying','next_retry_at'=>$retry,'last_error_code'=>$error,'lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'updated_at'=>$now),array('%s','%s','%s','%s','%s','%s','%s'),'retry_scheduled');
+	}
+
+	public function mark_completed($run_id,$lock_token):array{$now=self::now();return $this->worker_update($run_id,$lock_token,array('status'=>'completed','current_step'=>'complete','completed_at'=>$now,'lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'next_retry_at'=>null,'last_error_code'=>'','active_profile_key'=>null,'updated_at'=>$now),array('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s'),'run_completed');}
+	public function mark_failed($run_id,$lock_token,$error_code):array{$error=self::error($error_code);if(''===$error){return self::simple(false,$run_id,'invalid_error_code');}$now=self::now();return $this->worker_update($run_id,$lock_token,array('status'=>'failed','completed_at'=>$now,'last_error_code'=>$error,'lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'next_retry_at'=>null,'active_profile_key'=>null,'updated_at'=>$now),array('%s','%s','%s','%s','%s','%s','%s','%s','%s'),'run_failed');}
+
+	public function mark_cancelled($run_id):array{global $wpdb;$id=absint($run_id);$now=self::now();$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='cancelled',completed_at=%s,lock_token='',locked_at=NULL,lock_expires_at=NULL,next_retry_at=NULL,active_profile_key=NULL,updated_at=%s WHERE id=%d AND status IN ('queued','retrying')",$now,$now,$id);$changed=$wpdb->query($sql);return 1===$changed?self::simple(true,$id,'run_cancelled'):self::simple(false,$id,null===$this->get_by_id($id)?'run_not_found':'run_not_cancellable');}
+	public function cancel_claimed_run($run_id,$lock_token,$error_code='profile_not_active'):array{$error=self::error($error_code);if(''===$error){return self::simple(false,$run_id,'invalid_error_code');}$now=self::now();return $this->worker_update($run_id,$lock_token,array('status'=>'cancelled','completed_at'=>$now,'last_error_code'=>$error,'lock_token'=>'','locked_at'=>null,'lock_expires_at'=>null,'next_retry_at'=>null,'active_profile_key'=>null,'updated_at'=>$now),array('%s','%s','%s','%s','%s','%s','%s','%s','%s'),'run_cancelled');}
+
+	/** Recovers bounded stale locks; attempts at their maximum become terminal failures. */
+	public function recover_expired_locks($utc_now,$limit=20):array{
+		global $wpdb;$now=self::datetime($utc_now);if(null===$now){return array('success'=>false,'recovered'=>0,'failed'=>0,'code'=>'invalid_reference_datetime');}$limit=max(1,min(100,absint($limit)));$sql=$wpdb->prepare("SELECT id,attempt_count,max_attempts FROM {$this->table()} WHERE status='running' AND lock_expires_at IS NOT NULL AND lock_expires_at<=%s ORDER BY lock_expires_at ASC LIMIT %d",$now,$limit);$rows=$wpdb->get_results($sql,ARRAY_A);$recovered=0;$failed=0;
+		foreach($rows as $row){$id=absint($row['id']);if(absint($row['attempt_count'])>=absint($row['max_attempts'])){$q=$wpdb->prepare("UPDATE {$this->table()} SET status='failed',lock_token='',locked_at=NULL,lock_expires_at=NULL,next_retry_at=NULL,active_profile_key=NULL,completed_at=%s,last_error_code='retries_exhausted',updated_at=%s WHERE id=%d AND status='running' AND lock_expires_at<=%s",$now,$now,$id,$now);$failed+=1===$wpdb->query($q)?1:0;}else{$q=$wpdb->prepare("UPDATE {$this->table()} SET status='queued',lock_token='',locked_at=NULL,lock_expires_at=NULL,last_error_code='stale_lock_recovered',updated_at=%s WHERE id=%d AND status='running' AND lock_expires_at<=%s",$now,$id,$now);$recovered+=1===$wpdb->query($q)?1:0;}}
+		return array('success'=>true,'recovered'=>$recovered,'failed'=>$failed,'code'=>'expired_locks_recovered');
+	}
+
+	public function table_exists():bool{global $wpdb;$table=$this->table();return $table===$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));}
+
+	private function worker_update($run_id,$token,array $data,array $formats,string $code):array{global $wpdb;$id=absint($run_id);$token=is_scalar($token)?(string)$token:'';if(0===$id||''===$token){return self::simple(false,$id,'invalid_lock');}$now=self::now();$sets=array();$values=array();$i=0;foreach($data as $field=>$value){if(null===$value){$sets[]="{$field}=NULL";}else{$sets[]="{$field}=".$formats[$i];$values[]=$value;}$i++;}$values[]=$id;$values[]=$token;$values[]=$now;$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND status='running' AND lock_token=%s AND lock_expires_at IS NOT NULL AND lock_expires_at>%s",$values);$changed=$wpdb->query($sql);return 1===$changed?self::simple(true,$id,$code):self::simple(false,$id,null===$this->get_by_id($id)?'run_not_found':'invalid_or_expired_lock');}
+	private function fail_exhausted(int $id,string $now):void{global $wpdb;$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='failed',active_profile_key=NULL,last_error_code='retries_exhausted',completed_at=%s,lock_token='',locked_at=NULL,lock_expires_at=NULL,next_retry_at=NULL,updated_at=%s WHERE id=%d AND status IN ('queued','retrying') AND attempt_count>=max_attempts",$now,$now,$id);$wpdb->query($sql);}
+	private function normalize($row):?array{if(!is_array($row)){return null;}foreach(array('id','profile_id','attempt_count','max_attempts') as $f){$row[$f]=absint($row[$f]??0);}$row['active_profile_key']=null===$row['active_profile_key']?null:absint($row['active_profile_key']);$row['trigger_type']=in_array($row['trigger_type']??'',self::TRIGGERS,true)?$row['trigger_type']:'scheduled';$row['status']=in_array($row['status']??'',self::STATUSES,true)?$row['status']:'failed';$row['current_step']=in_array($row['current_step']??'',self::STEPS,true)?$row['current_step']:'pending';foreach(array('locked_at','lock_expires_at','next_retry_at','started_at','completed_at') as $f){$row[$f]=self::datetime($row[$f]??null);}unset($row['lock_token']);return $row;}
+	private function table():string{global $wpdb;return $wpdb->prefix.'aics_automation_runs';}
+	private static function result(bool $success,int $id,string $uuid,string $code):array{return array('success'=>$success,'run_id'=>$id,'uuid'=>$uuid,'code'=>$code);}
+	private static function lock_result(bool $success,int $id,string $token,string $code):array{return array('success'=>$success,'run_id'=>$id,'lock_token'=>$token,'code'=>$code);}
+	private static function simple(bool $success,$id,string $code):array{return array('success'=>$success,'run_id'=>absint($id),'code'=>$code);}
+	private static function now():string{return current_time('mysql',true);}
+	private static function plus_seconds(string $utc,int $seconds):string{return (new DateTimeImmutable($utc,new DateTimeZone('UTC')))->modify('+'.$seconds.' seconds')->format('Y-m-d H:i:s');}
+	private static function datetime($v):?string{if(null===$v||''===$v){return null;}if(!is_scalar($v)){return null;}$v=(string)$v;$d=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$v,new DateTimeZone('UTC'));$e=DateTimeImmutable::getLastErrors();return false!==$d&&(false===$e||(0===$e['warning_count']&&0===$e['error_count']))&&$d->format('Y-m-d H:i:s')===$v?$v:null;}
+	private static function key($v):string{return sanitize_key(is_scalar($v)?(string)$v:'');}
+	private static function error($v):string{return substr(self::key($v),0,100);}
+	private static function strict_int($v,int $min,int $max):?int{if(!is_scalar($v)||!preg_match('/^\d+$/',(string)$v)){return null;}$v=(int)$v;return $v>=$min&&$v<=$max?$v:null;}
+}

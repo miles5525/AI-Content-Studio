@@ -22,6 +22,7 @@ final class Deactivator {
 	 */
 	public static function deactivate(): void {
 		wp_clear_scheduled_hook( 'aics_cleanup_usage_logs' );
+		\AICS_Automation_Scheduler::clear();
 	}
 
 	/**

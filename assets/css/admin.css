@@ -146,6 +146,44 @@
 .aics-diagnostics textarea { padding: 12px; border-color: var(--aics-border); background: var(--aics-surface-muted); font-size: 12px; line-height: 1.5; }
 .aics-copy-status { min-height: 1.5em; color: var(--aics-success); font-weight: 600; }
 
+.aics-automations-page { padding-bottom: 32px; }
+.aics-automation-form { max-width: 980px; }
+.aics-automation-form .aics-section { margin-top: 20px; padding: 20px 24px; }
+.aics-automation-summary { max-width: 980px; overflow: hidden; }
+.aics-card-header { padding: 16px 20px; border-bottom: 1px solid var(--aics-border); background: var(--aics-surface-muted); }
+.aics-card-header h2 { margin: 0; }
+.aics-card-body { padding: 20px; }
+.aics-automation-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.aics-automation-summary-grid > div { min-width: 0; padding: 12px 14px; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: var(--aics-surface); }
+.aics-automation-summary-grid span, .aics-automation-summary-grid strong { display: block; }
+.aics-automation-summary-grid > div > span { margin-bottom: 5px; color: var(--aics-text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.aics-automation-summary-grid strong { overflow-wrap: anywhere; }
+.aics-automation-info { margin: 18px 0 0; padding: 12px 14px; border-left: 4px solid var(--aics-primary); background: var(--aics-primary-soft); }
+.aics-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.aics-field { min-width: 0; }
+.aics-field--full { grid-column: 1 / -1; }
+.aics-field-label { display: block; margin-bottom: 7px; font-weight: 600; }
+.aics-field > input:not([type="checkbox"]), .aics-field > select, .aics-field > textarea,
+.aics-field-label > input:not([type="checkbox"]) { display: block; width: 100%; max-width: none; margin-top: 7px; }
+.aics-field textarea { min-height: 110px; resize: vertical; }
+.aics-checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.aics-checkbox-option { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 11px 12px; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: var(--aics-surface-muted); }
+.aics-checkbox-option:hover { border-color: var(--aics-accent); }
+.aics-checkbox-option input { flex: 0 0 auto; margin-top: 2px; }
+.aics-checkbox-option small { display: block; margin-top: 3px; color: var(--aics-text-muted); font-weight: 400; }
+.aics-publish-warning { padding: 12px 14px; border-left: 4px solid #dba617; background: #fcf0c8; }
+.aics-publish-warning p { margin-bottom: 0; }
+.aics-automation-save { margin-top: 20px; }
+.aics-schedule-preview { max-width: 980px; margin-top: 20px; }
+.aics-schedule-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 0; }
+.aics-schedule-details div { padding: 10px 12px; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: var(--aics-surface-muted); }
+.aics-schedule-details dt { color: var(--aics-text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.aics-schedule-details dd { margin: 5px 0 0; font-weight: 600; }
+.aics-upcoming-runs { display: grid; gap: 8px; margin: 12px 0 0 22px; }
+.aics-upcoming-runs li { padding: 10px 12px; border-bottom: 1px solid var(--aics-border); }
+.aics-upcoming-runs code { display: block; margin-top: 4px; color: var(--aics-text-muted); font-size: 11px; }
+.aics-monthly-day-field > .aics-field { height: 100%; }
+
 @media screen and (max-width: 1024px) {
 	.aics-admin-wrap { max-width: none; }
 	.aics-dashboard-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -159,10 +197,14 @@
 	.aics-wordpress-draft-result .button { margin: 4px 4px 4px 0; }
 	.aics-wordpress-draft-result .button + .button { margin-left: 0; }
 	.aics-admin-wrap .button { white-space: normal; }
+	.aics-automation-summary-grid, .aics-form-grid { grid-template-columns: 1fr; }
+	.aics-schedule-details { grid-template-columns: 1fr; }
+	.aics-field--full { grid-column: auto; }
 }
 @media screen and (max-width: 480px) {
 	.aics-idea-grid { grid-template-columns: minmax(0, 1fr); }
 	.aics-admin-wrap input.regular-text, .aics-admin-wrap select { width: 100%; max-width: 100%; }
 	.aics-actions, .aics-dashboard-links { align-items: stretch; flex-direction: column; }
 	.aics-actions .button, .aics-dashboard-links .button { width: 100%; }
+	.aics-checkbox-grid { grid-template-columns: 1fr; }
 }

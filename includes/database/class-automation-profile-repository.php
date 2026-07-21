@@ -206,16 +206,16 @@ final class AICS_Automation_Profile_Repository {
 	private static function text_array( $value ): array {
 		if ( ! is_array( $value ) ) { return array(); }
 		$items = array();
-		foreach ( $value as $item ) { if ( is_scalar( $item ) ) { $item = self::limit( sanitize_text_field( (string) $item ), 200 ); if ( '' !== $item ) { $items[] = $item; } } }
-		return array_values( array_unique( $items ) );
+		foreach ( $value as $item ) { if ( is_scalar( $item ) ) { $item = self::limit( sanitize_text_field( (string) $item ), 250 ); if ( '' !== $item ) { $items[] = $item; } } }
+		return array_slice( array_values( array_unique( $items ) ), 0, 50 );
 	}
 	private static function business_context( $value ): array {
 		if ( ! is_array( $value ) ) { return array(); }
 		$out = array();
 		$arrays = array( 'core_topics', 'topics_to_avoid', 'prohibited_claims' );
-		$textareas = array( 'business_description', 'products_services', 'target_audience', 'website_purpose', 'brand_voice', 'preferred_cta' );
+		$limits = array( 'business_name'=>191, 'business_description'=>5000, 'industry'=>191, 'products_services'=>5000, 'target_audience'=>3000, 'primary_location'=>191, 'website_purpose'=>3000, 'brand_voice'=>3000, 'preferred_tone'=>30, 'preferred_cta'=>2000 );
 		$keys = array( 'business_name', 'business_description', 'industry', 'products_services', 'target_audience', 'primary_location', 'website_purpose', 'brand_voice', 'preferred_tone', 'core_topics', 'topics_to_avoid', 'preferred_cta', 'prohibited_claims' );
-		foreach ( $keys as $key ) { if ( array_key_exists( $key, $value ) ) { $scalar = is_scalar( $value[ $key ] ) ? (string) $value[ $key ] : ''; $out[ $key ] = in_array( $key, $arrays, true ) ? self::text_array( $value[ $key ] ) : self::limit( in_array( $key, $textareas, true ) ? sanitize_textarea_field( $scalar ) : sanitize_text_field( $scalar ), in_array( $key, $textareas, true ) ? 3000 : 300 ); } }
+		foreach ( $keys as $key ) { if ( array_key_exists( $key, $value ) ) { $scalar = is_scalar( $value[ $key ] ) ? (string) $value[ $key ] : ''; $out[ $key ] = in_array( $key, $arrays, true ) ? self::text_array( $value[ $key ] ) : self::limit( isset( $limits[ $key ] ) && $limits[ $key ] > 191 ? sanitize_textarea_field( $scalar ) : sanitize_text_field( $scalar ), $limits[ $key ] ?? 300 ); } }
 		return $out;
 	}
 	private static function content_settings( $value ): array {
@@ -231,7 +231,7 @@ final class AICS_Automation_Profile_Repository {
 		$submitted_days = array(); foreach ( is_array( $value['days_of_week'] ?? null ) ? $value['days_of_week'] : array() as $submitted_day ) { if ( is_scalar( $submitted_day ) ) { $submitted_days[] = sanitize_key( (string) $submitted_day ); } }
 		$days = array(); foreach ( $weekdays as $day ) { if ( in_array( $day, $submitted_days, true ) ) { $days[] = $day; } }
 		$time = is_scalar( $value['publish_time'] ?? null ) ? (string) $value['publish_time'] : ''; if ( ! preg_match( '/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time ) ) { $time = ''; }
-		return array( 'frequency' => in_array( $value['frequency'] ?? '', $frequencies, true ) ? $value['frequency'] : 'weekly', 'interval' => self::integer( $value['interval'] ?? 1, 1, 31, 1 ), 'days_of_week' => $days, 'publish_time' => $time, 'posts_per_period' => self::integer( $value['posts_per_period'] ?? 1, 1, 31, 1 ), 'start_date' => self::date( $value['start_date'] ?? '' ), 'end_date' => self::date( $value['end_date'] ?? '' ) );
+		return array( 'frequency' => in_array( $value['frequency'] ?? '', $frequencies, true ) ? $value['frequency'] : 'weekly', 'interval' => self::integer( $value['interval'] ?? 1, 1, 31, 1 ), 'days_of_week' => $days, 'publish_time' => $time, 'posts_per_period' => self::integer( $value['posts_per_period'] ?? 1, 1, 31, 1 ), 'start_date' => self::date( $value['start_date'] ?? '' ), 'end_date' => self::date( $value['end_date'] ?? '' ), 'monthly_day' => self::integer( $value['monthly_day'] ?? 1, 1, 31, 1 ) );
 	}
 	private static function workflow_rules( $value ): array { if ( ! is_array( $value ) ) { return array(); } return array( 'require_idea_approval' => self::boolean( $value['require_idea_approval'] ?? false ), 'require_article_approval' => self::boolean( $value['require_article_approval'] ?? false ), 'require_publish_approval' => self::boolean( $value['require_publish_approval'] ?? false ) ); }
 	private static function publishing_settings( $value ): array { if ( ! is_array( $value ) ) { return array(); } $modes = array( 'draft', 'schedule', 'publish' ); $statuses = array( 'draft', 'future', 'publish' ); return array( 'publishing_mode' => in_array( $value['publishing_mode'] ?? '', $modes, true ) ? $value['publishing_mode'] : 'draft', 'post_status_after_generation' => in_array( $value['post_status_after_generation'] ?? '', $statuses, true ) ? $value['post_status_after_generation'] : 'draft', 'category_id' => absint( $value['category_id'] ?? 0 ), 'author_id' => absint( $value['author_id'] ?? 0 ) ); }

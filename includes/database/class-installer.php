@@ -49,6 +49,8 @@ final class Installer {
 
 		$usage_table     = $wpdb->prefix . 'aics_usage_logs';
 		$profiles_table  = $wpdb->prefix . 'aics_automation_profiles';
+		$runs_table      = $wpdb->prefix . 'aics_automation_runs';
+		$ideas_table     = $wpdb->prefix . 'aics_content_ideas';
 		$charset_collate = $wpdb->get_charset_collate();
 		$usage_sql       = "CREATE TABLE {$usage_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -97,6 +99,82 @@ final class Installer {
 			KEY created_by (created_by),
 			KEY updated_by (updated_by)
 		) {$charset_collate};";
+		$runs_sql        = "CREATE TABLE {$runs_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			run_uuid char(36) NOT NULL,
+			profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			active_profile_key bigint(20) unsigned NULL,
+			trigger_type varchar(30) NOT NULL DEFAULT 'scheduled',
+			status varchar(30) NOT NULL DEFAULT 'queued',
+			current_step varchar(50) NOT NULL DEFAULT 'pending',
+			lock_token varchar(64) NOT NULL DEFAULT '',
+			locked_at datetime NULL,
+			lock_expires_at datetime NULL,
+			attempt_count smallint(5) unsigned NOT NULL DEFAULT 0,
+			max_attempts smallint(5) unsigned NOT NULL DEFAULT 3,
+			next_retry_at datetime NULL,
+			last_error_code varchar(100) NOT NULL DEFAULT '',
+			started_at datetime NULL,
+			completed_at datetime NULL,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY run_uuid (run_uuid),
+			UNIQUE KEY active_profile_key (active_profile_key),
+			KEY profile_id (profile_id),
+			KEY trigger_type (trigger_type),
+			KEY status (status),
+			KEY current_step (current_step),
+			KEY lock_expires_at (lock_expires_at),
+			KEY next_retry_at (next_retry_at),
+			KEY created_at (created_at),
+			KEY updated_at (updated_at)
+		) {$charset_collate};";
+		$ideas_sql       = "CREATE TABLE {$ideas_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			idea_uuid char(36) NOT NULL,
+			profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			run_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			source_type varchar(20) NOT NULL DEFAULT 'automation',
+			title varchar(250) NOT NULL DEFAULT '',
+			normalized_title varchar(250) NOT NULL DEFAULT '',
+			summary text NULL,
+			primary_keyword varchar(191) NOT NULL DEFAULT '',
+			normalized_keyword varchar(191) NOT NULL DEFAULT '',
+			secondary_keywords longtext NULL,
+			search_intent varchar(30) NOT NULL DEFAULT 'informational',
+			suggested_category varchar(191) NOT NULL DEFAULT '',
+			outline longtext NULL,
+			content_fingerprint char(64) NOT NULL DEFAULT '',
+			score decimal(5,2) NOT NULL DEFAULT 0.00,
+			status varchar(30) NOT NULL DEFAULT 'generated',
+			priority smallint(5) unsigned NOT NULL DEFAULT 0,
+			planned_publish_at datetime NULL,
+			approved_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			approved_at datetime NULL,
+			rejected_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			rejected_at datetime NULL,
+			rejection_code varchar(100) NOT NULL DEFAULT '',
+			last_error_code varchar(100) NOT NULL DEFAULT '',
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			updated_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY idea_uuid (idea_uuid),
+			KEY profile_id (profile_id),
+			KEY run_id (run_id),
+			KEY source_type (source_type),
+			KEY status (status),
+			KEY search_intent (search_intent),
+			KEY content_fingerprint (content_fingerprint),
+			KEY normalized_keyword (normalized_keyword),
+			KEY planned_publish_at (planned_publish_at),
+			KEY approved_by (approved_by),
+			KEY created_at (created_at),
+			KEY updated_at (updated_at),
+			KEY normalized_title (normalized_title(191))
+		) {$charset_collate};";
 
 		$wpdb->last_error = '';
 		dbDelta( $usage_sql );
@@ -104,11 +182,19 @@ final class Installer {
 		$wpdb->last_error = '';
 		dbDelta( $profiles_sql );
 		$profiles_error = $wpdb->last_error;
+		$wpdb->last_error = '';
+		dbDelta( $runs_sql );
+		$runs_error = $wpdb->last_error;
+		$wpdb->last_error = '';
+		dbDelta( $ideas_sql );
+		$ideas_error = $wpdb->last_error;
 
 		$usage_exists    = $usage_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $usage_table ) ) );
 		$profiles_exists = $profiles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $profiles_table ) ) );
+		$runs_exists     = $runs_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $runs_table ) ) );
+		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && $usage_exists && $profiles_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && $usage_exists && $profiles_exists && $runs_exists && $ideas_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}

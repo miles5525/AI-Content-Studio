@@ -14,7 +14,7 @@ final class AICS_Usage_Logger {
 	private const EVENTS = array( 'ai_request', 'post_creation', 'system_test' );
 	private const OPERATIONS = array( 'openai_connection_test', 'generate_blog_ideas', 'generate_article_draft', 'create_wordpress_draft' );
 	private const STATUSES = array( 'success', 'failed' );
-	private const METADATA_KEYS = array( 'idea_count', 'requested_length', 'tone', 'post_status', 'test_type' );
+	private const METADATA_KEYS = array( 'idea_count', 'source', 'requested_length', 'tone', 'post_status', 'test_type' );
 
 	public static function log( array $entry ): bool {
 		try {

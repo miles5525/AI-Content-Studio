@@ -58,6 +58,13 @@ final class AICS_AI_Engine {
 		return AICS_AI_Response::success( array( 'ideas' => $ideas ), __( 'Blog ideas generated successfully.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
 	}
 
+	/** Sends one automation-specific structured idea request through the configured provider. */
+	public function generate_automation_ideas( array $business_context, array $content_settings ): AICS_AI_Response {
+		try { $request = $this->prompt_engine->create_automation_ideas_request( $business_context, $content_settings ); }
+		catch ( InvalidArgumentException $exception ) { return AICS_AI_Response::failure( 'invalid-automation-profile', __( 'The automation profile is invalid.', 'ai-content-studio' ) ); }
+		return $this->provider->generate( $request );
+	}
+
 	/**
 	 * Generates and validates a complete structured article draft.
 	 *

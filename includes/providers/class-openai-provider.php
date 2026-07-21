@@ -80,7 +80,7 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 			return AICS_AI_Response::failure( 'missing-api-key', __( 'No OpenAI API key is configured.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
-		if ( ! in_array( $request->get_task_type(), array( 'blog_ideas', 'article_draft' ), true ) ) {
+		if ( ! in_array( $request->get_task_type(), array( 'blog_ideas', 'automation_ideas', 'article_draft' ), true ) ) {
 			return AICS_AI_Response::failure( 'unsupported-task', __( 'The requested AI task is not supported.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
