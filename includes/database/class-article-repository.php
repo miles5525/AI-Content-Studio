@@ -136,6 +136,12 @@ final class AICS_Article_Repository {
 		return $this->get_articles( $args );
 	}
 
+	/** Counts downstream articles with a native post association for one run/profile. */
+	public function count_associated_posts_for_run( $run_id, $profile_id ): int {
+		global $wpdb; $run=absint($run_id); $profile=absint($profile_id); if(0===$run||0===$profile){return 0;}
+		return (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$this->table()} WHERE run_id=%d AND profile_id=%d AND source_type='automation' AND status IN ('draft_created','scheduled','published') AND wordpress_post_id IS NOT NULL AND wordpress_post_id>0",$run,$profile));
+	}
+
 	/** Returns one deterministically ordered approved automation article. */
 	public function get_next_approved_for_post_creation( $run_id, $profile_id ): ?array {
 		global $wpdb;

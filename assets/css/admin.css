@@ -184,7 +184,7 @@
 .aics-upcoming-runs code { display: block; margin-top: 4px; color: var(--aics-text-muted); font-size: 11px; }
 .aics-monthly-day-field > .aics-field { height: 100%; }
 
-.aics-approval-tabs { display: flex; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid var(--aics-border); }
+.aics-approval-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid var(--aics-border); }
 .aics-approval-tabs a { padding: 10px 14px; text-decoration: none; font-weight: 600; }
 .aics-approval-tabs a.current { border-bottom: 3px solid var(--aics-primary); color: var(--aics-primary-hover); }
 .aics-table-wrap { max-width: 100%; overflow-x: auto; }

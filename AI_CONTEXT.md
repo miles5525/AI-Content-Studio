@@ -774,6 +774,20 @@ After delivery, draft mode routes to `finalize`; schedule/publish modes route to
 
 Product decision: every automated article first becomes a native WordPress `draft`, including profiles configured for schedule or publish. Later workflow tasks may safely change that draft to `future` or `publish`, or retain it as a draft. This provides one consistent, recoverable delivery pipeline.
 
+## Persistent Content Task 8
+
+Persistent Content Task 8 is complete. The unified Approval Center now has Ideas, Articles, and Publishing tabs, with direct pending counts, bounded 20-item pagination, and a waiting-run list limited to queued `waiting_publish_approval` runs. Publishing review is read-only and shows the stored delivery mode, workflow details, associated draft summaries, planned dates, native WordPress edit links, explicit status text, and no complete article body.
+
+Final publishing decisions remain a pure workflow boundary. `AICS_Approval_Workflow_Service` derives the run, profile, publishing mode, final-approval requirement, articles, and post IDs from persistent records. Before presenting active controls or accepting a decision it validates each article association and requires the native post, post type, draft status, `_aics_generated_post`, article ID, run ID, and profile ID metadata to agree. It never schedules, publishes, creates, edits, or regenerates a post and never invokes an AI provider.
+
+Approval uses a run-specific POST nonce and atomically advances `waiting_publish_approval` to `schedule_post` or `publish_post` according to the server-side profile setting. The run remains queued, its active profile key is preserved, and no WordPress status changes during the request. The safe decline action uses a separate nonce and controlled reason, atomically cancels only an unlocked queued waiting run, clears its active profile key, and preserves the waiting step, drafts, articles, ideas, profile, attempts, and all generated content. Repeated and competing decisions are idempotent or fail with controlled conflict results.
+
+`AICS_Automation_Run_Repository` now supports strictly filtered direct counts, waiting-publish transitions, and controlled waiting-run cancellation. `AICS_Article_Repository` provides a direct associated-post count for the publishing list. The Automations summary displays final publishing approvals and links to the Publishing tab while stating that WordPress scheduling and publishing execution remain Task 9.
+
+No schema change was introduced. The first version uses the run `updated_at` transition time or `completed_at` cancellation time as its workflow audit. No administrator identity is persisted because the current usage log is operation-oriented and is not a suitable generic workflow-decision audit store. A dedicated decision-audit model may be added in a future version.
+
+Task 9 remains responsible for WordPress scheduling, publishing, run finalization, profile runtime completion, and idea/article completion. None of those actions is implemented or processed by Task 8.
+
 ## Important Instruction for Codex
 
 Before making any code changes:
