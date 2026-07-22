@@ -788,6 +788,36 @@ No schema change was introduced. The first version uses the run `updated_at` tra
 
 Task 9 remains responsible for WordPress scheduling, publishing, run finalization, profile runtime completion, and idea/article completion. None of those actions is implemented or processed by Task 8.
 
+## Persistent Content Task 9
+
+Persistent Content Task 9 is complete. `AICS_Automation_Delivery_Service` centrally validates persistent article/post associations and private automation ownership metadata, schedules existing drafts through `wp_update_post()` as native `future` posts, publishes existing drafts through `wp_update_post()` as native `publish` posts, recovers already delivered WordPress states, and synchronizes article states without creating posts or generating content.
+
+The worker now claims `schedule_post`, `publish_post`, and `finalize` in addition to the earlier active steps. It still claims one run and performs at most one WordPress delivery action per invocation. Waiting approval and complete steps remain non-claimable. Schedule and publish stages retain the 600-second lock policy, recover from actual post state after interruptions, route to `finalize` only after all required articles are delivered, and preserve all content and ownership metadata.
+
+Scheduling uses `AICS_Schedule_Calculator` and the WordPress site timezone. The first newly calculated slot is strictly after a five-minute UTC safety reference; subsequent articles use the next eligible calendar slot after the latest slot already assigned in the run. Valid distinct future `planned_publish_at` values are preserved on retry. The authoritative slot is stored in UTC before WordPress is updated; `post_date` is site-local and `post_date_gmt` is UTC. No fixed-day arithmetic is used, so site timezone and daylight-saving rules remain authoritative.
+
+Each selected article receives one distinct configured publishing time. `selected_ideas_per_cycle` remains the per-run delivery count. `posts_per_period` is preserved but does not create multiple same-day time windows in Milestone 1; richer distribution remains a future Content Calendar capability.
+
+Article final states continue to represent real delivery: `draft_created` for retained drafts, `scheduled` for future posts, and `published` for published posts. No generic completed article status was added. Focused repository synchronization preserves generated content, hashes, approvals, post creation time, and planned scheduling data. Missing posts, unsafe ownership, invalid delivery states, and exhausted/no-future schedule configurations fail with controlled codes and preserve the posts and content.
+
+Finalization validates mode-specific article and WordPress readiness, completes only `article_generated` ideas associated with successfully delivered articles, updates the active profile's UTC `last_run_at` while preserving `next_run_at`, and then atomically completes the run. Completion sets status `completed`, step `complete`, clears locks/retry state and `active_profile_key`, and permits the dispatcher to create the next due cycle. Rejected, failed, paused, or unrelated ideas are not completed.
+
+The retry budget is now stage-scoped. A successful unfinished lock release and final completion reset `attempt_count` to zero and clear `next_retry_at` and the run retry error. Repeated failures in the same stage continue to increment claims and use the existing 15/60/240-minute retry schedule up to `max_attempts`. Failed claims do not increment attempts. This prevents a healthy multi-invocation cycle from exhausting a lifetime claim counter while retaining bounded retries for each failing stage.
+
+Content History already includes `draft`, `future`, and `publish` posts through the unchanged `_aics_generated_post` marker. Dashboard AI metrics and the native current-draft count remain unchanged. Automations now reports the connected core engine and bounded failed-run attention count. System Status treats missing dispatcher/worker events, required tables, or the delivery service as critical and explains the `DISABLE_WP_CRON` warning without executing delivery.
+
+No new usage rows were added: the current logger has controlled AI, post-creation, and system-test operations but no clean generic delivery/completion audit vocabulary. This avoids distorting existing metrics. No schema, approval action, endpoint, notification, post editor, or run-history interface was added.
+
+Files created: `includes/services/class-automation-delivery-service.php`. Files modified: `ai-content-studio.php`, `includes/services/class-automation-worker.php`, `includes/database/class-automation-run-repository.php`, `includes/database/class-article-repository.php`, `includes/admin/class-automations-page.php`, `includes/services/class-system-check.php`, and `AI_CONTEXT.md`.
+
+## Milestone 1 — Core End-to-End Automation MVP
+
+Milestone 1 implementation is complete. It includes persistent automation configuration, site-timezone scheduling, dispatcher/worker execution and locks, automated idea generation and duplicate prevention, scoring and routing, idea/article/final publishing approvals, persistent article generation, native draft staging, future-post scheduling, automatic publishing, mode-aware finalization, and future-cycle readiness. Static validation has passed; the configured live acceptance matrix below remains required before production sign-off.
+
+The next planned milestone is **Milestone 2 — Operational Visibility, Recovery Controls, and Private Beta Hardening**. Its suggested first task is **Run History and Needs Attention Center**. It has not begun.
+
+Current limitations: `posts_per_period` does not yet distribute multiple same-day slots; no run-history or recovery UI exists; no delivery notifications are sent; and full browser/cron end-to-end scenarios still require execution in a configured WordPress test site with valid profiles and provider access.
+
 ## Important Instruction for Codex
 
 Before making any code changes:

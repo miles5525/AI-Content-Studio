@@ -299,6 +299,20 @@ final class AICS_Article_Repository {
 		return false === $changed ? self::simple( false, $id, 'database_update_failed' ) : self::simple( true, $id, 'planned_publish_at_updated' );
 	}
 
+	/** Synchronizes an existing associated post to its scheduled article state. */
+	public function mark_scheduled( $article_id, $post_id, $planned_publish_at, $updated_by = 0 ): array {
+		global $wpdb; $id=absint($article_id);$post=absint($post_id);$user=self::nonnegative($updated_by);$planned=self::datetime($planned_publish_at);$article=$this->get_by_id($id);
+		if(!$article){return self::simple(false,0,'article_not_found');}if(0===$post||$article['wordpress_post_id']!==$post||null===$planned||null===$user){return self::simple(false,$id,'invalid_post_association');}if(!in_array($article['status'],array('draft_created','scheduled'),true)){return self::simple(false,$id,'article_schedule_conflict');}
+		$now=self::now();$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='scheduled',planned_publish_at=%s,scheduled_at=COALESCE(scheduled_at,%s),last_error_code='',updated_by=%d,updated_at=%s WHERE id=%d AND wordpress_post_id=%d AND status IN ('draft_created','scheduled')",$planned,$now,$user,$now,$id,$post);$changed=$wpdb->query($sql);return false===$changed?self::simple(false,$id,'database_update_failed'):self::simple(true,$id,'article_marked_scheduled');
+	}
+
+	/** Synchronizes an existing associated post to its published article state. */
+	public function mark_published( $article_id, $post_id, $published_at_utc, $updated_by = 0 ): array {
+		global $wpdb;$id=absint($article_id);$post=absint($post_id);$user=self::nonnegative($updated_by);$published=self::datetime($published_at_utc);$article=$this->get_by_id($id);
+		if(!$article){return self::simple(false,0,'article_not_found');}if(0===$post||$article['wordpress_post_id']!==$post||null===$published||null===$user){return self::simple(false,$id,'invalid_post_association');}if(!in_array($article['status'],array('draft_created','scheduled','published'),true)){return self::simple(false,$id,'article_publish_conflict');}
+		$now=self::now();$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='published',published_at=COALESCE(published_at,%s),last_error_code='',updated_by=%d,updated_at=%s WHERE id=%d AND wordpress_post_id=%d AND status IN ('draft_created','scheduled','published')",$published,$user,$now,$id,$post);$changed=$wpdb->query($sql);return false===$changed?self::simple(false,$id,'database_update_failed'):self::simple(true,$id,'article_marked_published');
+	}
+
 	public function update_error_code( $article_id, $error_code, $updated_by = 0 ): array {
 		global $wpdb;
 		$id = absint( $article_id ); $user = self::nonnegative( $updated_by ); $code = self::error_code( $error_code );
