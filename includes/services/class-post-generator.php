@@ -121,27 +121,6 @@ final class AICS_Post_Generator {
 			);
 		}
 
-		$post_id = wp_insert_post(
-			array(
-				'post_type'    => 'post',
-				'post_status'  => 'draft',
-				'post_title'   => $article['title'],
-				'post_content' => $article['content'],
-				'post_excerpt' => $article['excerpt'],
-				'post_author'  => $user_id,
-			),
-			true
-		);
-
-		if ( is_wp_error( $post_id ) || $post_id < 1 ) {
-			return array(
-				'success' => false,
-				'post_id' => 0,
-				'code'    => 'wordpress-draft-creation-failed',
-				'message' => __( 'WordPress could not create the draft.', 'ai-content-studio' ),
-			);
-		}
-
 		$metadata = array(
 			'_aics_generated_post'       => 1,
 			'_aics_source_idea_id'       => sanitize_key( (string) ( $context['idea_id'] ?? '' ) ),
@@ -152,6 +131,18 @@ final class AICS_Post_Generator {
 			'_aics_created_by_user'      => $user_id,
 			'_aics_generation_timestamp' => absint( $context['generated_at'] ?? current_time( 'timestamp', true ) ),
 		);
+		return $this->create_draft_from_article( $article, array( 'author_id' => $user_id ), $metadata );
+	}
+
+	/** Creates a native draft from controlled article data and settings. */
+	public function create_draft_from_article( array $article_data, array $post_settings, array $metadata = array() ): array {
+		$article = $this->prepare_generated_article( $article_data );
+		if ( is_wp_error( $article ) ) { return array( 'success'=>false, 'post_id'=>0, 'code'=>'invalid-article-draft', 'message'=>__( 'The reviewed article draft is invalid.', 'ai-content-studio' ) ); }
+		$args = array( 'post_type'=>'post', 'post_status'=>'draft', 'post_title'=>$article['title'], 'post_content'=>$article['content'], 'post_excerpt'=>$article['excerpt'], 'post_author'=>absint( $post_settings['author_id'] ?? 0 ) );
+		$category_id = absint( $post_settings['category_id'] ?? 0 );
+		if ( $category_id > 0 ) { $args['post_category'] = array( $category_id ); }
+		$post_id = wp_insert_post( $args, true );
+		if ( is_wp_error( $post_id ) || $post_id < 1 ) { return array( 'success'=>false, 'post_id'=>0, 'code'=>'wordpress-draft-creation-failed', 'message'=>__( 'WordPress could not create the draft.', 'ai-content-studio' ) ); }
 		$metadata_saved = true;
 
 		foreach ( $metadata as $key => $value ) {

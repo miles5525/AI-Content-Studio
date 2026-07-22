@@ -760,7 +760,19 @@ Files created: `includes/admin/class-approvals-page.php` and `includes/services/
 
 Article/idea editing, regeneration, revision requests, reopening decisions, bulk actions, approval notifications, WordPress post creation, scheduling, and publishing remain unimplemented. No database schema change was required; schema version remains `0.7.0`.
 
-The next planned task is Persistent Content Task 7 — Approved Article to WordPress Post Creation and `create_post` Worker Processing. It has not begun.
+The next planned task was Persistent Content Task 7 — Approved Article to WordPress Post Creation and `create_post` Worker Processing. It is documented as complete below.
+
+## Persistent Content Task 7
+
+Persistent Content Task 7 is complete. The automation worker now claims `create_post` runs and processes at most one approved persistent automation article per invocation. Articles are selected deterministically by dated `planned_publish_at` values first, then creation time and ID. The worker retains the existing atomic run lock and retry policy, keeps the run at `create_post` while another approved article needs delivery, and routes only after all required drafts exist.
+
+`AICS_Automation_Post_Creator` validates persistent article, idea, run, profile, author, category, content, and association data without calling an AI provider. It reuses `AICS_Post_Generator` for sanitization and native `wp_insert_post()` handling, always creates the first persistent WordPress state as `draft`, applies a validated configured author and category/default-category fallback, stores the existing `_aics_generated_post` marker plus private persistent automation association metadata, and associates the post through `AICS_Article_Repository` as `draft_created`.
+
+Post creation is idempotent across repository associations and a bounded `_aics_article_id` lookup. Valid existing posts are recovered, conflicting associations fail safely, and a newly created concurrent duplicate is moved to Trash when another valid association won. Downstream `draft_created`, `scheduled`, and `published` articles are never moved backward. Controlled failures use the existing 15/60/240-minute retry schedule; terminal article failures move approved articles to `needs_attention` while preserving generated and approval data.
+
+After delivery, draft mode routes to `finalize`; schedule/publish modes route to `schedule_post`/`publish_post` when final approval is not required, or `waiting_publish_approval` when it is. None of those destination steps is processed here. No scheduling, publishing, final publish approval action, content generation, schema change, or new table was added.
+
+Product decision: every automated article first becomes a native WordPress `draft`, including profiles configured for schedule or publish. Later workflow tasks may safely change that draft to `future` or `publish`, or retain it as a draft. This provides one consistent, recoverable delivery pipeline.
 
 ## Important Instruction for Codex
 

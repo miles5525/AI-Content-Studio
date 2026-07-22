@@ -43,11 +43,12 @@ require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-idea-generato
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-idea-evaluator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-article-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-approval-workflow-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-post-creator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-worker.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-scheduler.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-system-check.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-http-client.php';
-require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-ai-request.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-ai-response.php';
 require_once AICS_PLUGIN_DIR . 'includes/ai/class-prompt-engine.php';

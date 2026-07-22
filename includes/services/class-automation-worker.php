@@ -10,20 +10,22 @@ final class AICS_Automation_Worker {
 	private AICS_Automation_Idea_Evaluator $evaluator;
 	private AICS_Article_Repository $articles;
 	private AICS_Automation_Article_Generator $article_generator;
+	private AICS_Automation_Post_Creator $post_creator;
 
-	public function __construct( ?AICS_Automation_Run_Repository $runs = null, ?AICS_Automation_Profile_Repository $profiles = null, ?AICS_Content_Idea_Repository $ideas = null, ?AICS_Automation_Idea_Generator $generator = null, ?AICS_Automation_Idea_Evaluator $evaluator = null, ?AICS_Article_Repository $articles = null, ?AICS_Automation_Article_Generator $article_generator = null ) {
+	public function __construct( ?AICS_Automation_Run_Repository $runs = null, ?AICS_Automation_Profile_Repository $profiles = null, ?AICS_Content_Idea_Repository $ideas = null, ?AICS_Automation_Idea_Generator $generator = null, ?AICS_Automation_Idea_Evaluator $evaluator = null, ?AICS_Article_Repository $articles = null, ?AICS_Automation_Article_Generator $article_generator = null, ?AICS_Automation_Post_Creator $post_creator = null ) {
 		$this->runs = $runs ?? new AICS_Automation_Run_Repository(); $this->profiles = $profiles ?? new AICS_Automation_Profile_Repository(); $this->ideas = $ideas ?? new AICS_Content_Idea_Repository();
 		$this->generator = $generator ?? new AICS_Automation_Idea_Generator( null, $this->ideas ); $this->evaluator = $evaluator ?? new AICS_Automation_Idea_Evaluator( null, $this->ideas );
 		$this->articles = $articles ?? new AICS_Article_Repository(); $this->article_generator = $article_generator ?? new AICS_Automation_Article_Generator( null, $this->ideas, $this->articles );
+		$this->post_creator = $post_creator ?? new AICS_Automation_Post_Creator( $this->articles, $this->ideas );
 	}
 
 	public function process(): array {
-		$result = array( 'success'=>true,'code'=>'no_claimable_runs','runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0 );
+		$result = array( 'success'=>true,'code'=>'no_claimable_runs','runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0,'posts_created'=>0 );
 		try {
-			$steps = array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article' );
+			$steps = array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article', 'create_post' );
 			$candidates = $this->runs->get_claimable_runs( current_time( 'mysql', true ), $steps, 1 );
 			if ( ! $candidates ) { return $result; }
-			$result['runs_checked'] = 1; $ttl = in_array( $candidates[0]['current_step'], array( 'queue_idea', 'generate_article' ), true ) ? 1800 : 900;
+			$result['runs_checked'] = 1; $ttl = in_array( $candidates[0]['current_step'], array( 'queue_idea', 'generate_article' ), true ) ? 1800 : ( 'create_post' === $candidates[0]['current_step'] ? 600 : 900 );
 			$claim = $this->runs->claim_run( $candidates[0]['id'], $ttl );
 			if ( ! ( $claim['success'] ?? false ) ) { return $this->failed( $result, 'run_claim_failed' ); }
 			$result['runs_claimed'] = 1; $token = $claim['lock_token']; $run = $this->runs->get_by_id( $candidates[0]['id'] );
@@ -32,6 +34,7 @@ final class AICS_Automation_Worker {
 			if ( ! $profile ) { $this->runs->mark_failed( $run['id'], $token, 'automation_profile_missing' ); return $this->failed( $result, 'automation_profile_missing' ); }
 			if ( 'active' !== $profile['status'] ) { $this->runs->cancel_claimed_run( $run['id'], $token, 'profile_not_active' ); $result['code'] = 'profile_not_active'; return $result; }
 			if ( 'evaluate_ideas' === $run['current_step'] ) { return $this->evaluate_step( $profile, $run, $token, $result ); }
+			if ( 'create_post' === $run['current_step'] ) { return $this->create_post_step( $profile, $run, $token, $result ); }
 			if ( in_array( $run['current_step'], array( 'queue_idea', 'generate_article' ), true ) ) { return $this->article_step( $profile, $run, $token, $result ); }
 			if ( ! in_array( $run['current_step'], array( 'pending', 'generate_ideas' ), true ) ) { $this->runs->release_lock( $run['id'], $token ); $result['code'] = 'unsupported_run_step'; return $result; }
 			if ( $this->ideas->count_ideas( array( 'run_id'=>$run['id'] ) ) > 0 ) { $this->runs->update_step( $run['id'], $token, 'evaluate_ideas' ); $this->runs->release_lock( $run['id'], $token ); $result['code'] = 'ideas_already_generated'; return $result; }
@@ -41,6 +44,32 @@ final class AICS_Automation_Worker {
 			if ( $generated['success'] ) { $result['ideas_created'] = absint( $generated['created'] ); $result['duplicates'] = absint( $generated['batch_duplicates'] ) + absint( $generated['historical_duplicates'] ); $this->runs->update_step( $run['id'], $token, 'evaluate_ideas' ); $this->runs->release_lock( $run['id'], $token ); $result['code'] = 'worker_completed'; return $result; }
 			return $this->handle_failure( $run, $token, $generated, $result );
 		} catch ( Throwable $exception ) { if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) { error_log( 'AI Content Studio worker stopped with controlled code: unexpected_worker_error' ); } return $this->failed( $result, 'unexpected_worker_error' ); }
+	}
+
+	private function create_post_step( array $profile, array $run, string $token, array $result ): array {
+		$article = $this->articles->get_next_approved_for_post_creation( $run['id'], $profile['id'] );
+		if ( $article ) {
+			$created = $this->post_creator->create_post_for_article( $article['id'], $profile );
+			if ( empty( $created['success'] ) ) { return $this->handle_post_failure( $run, $token, $created, $result ); }
+			$result['posts_created'] = ! empty( $created['created'] ) ? 1 : 0;
+			if ( $this->articles->get_next_approved_for_post_creation( $run['id'], $profile['id'] ) ) { if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');} $result['code']=$created['code']; return $result; }
+		}
+		$all = $this->articles->get_articles_for_run( $run['id'], array( 'limit'=>100, 'orderby'=>'created_at', 'order'=>'ASC' ) );
+		foreach ( $all as $item ) { if ( $item['profile_id']===absint($profile['id'])&&'automation'===$item['source_type']&&in_array($item['status'],array('queued','generating','generated','pending_approval','failed','paused','needs_attention'),true) ) { return $this->handle_post_failure($run,$token,array('code'=>'invalid_article_workflow','retryable'=>false,'article_id'=>$item['id']),$result); } }
+		foreach ( $all as $item ) { if ( $item['profile_id']===absint($profile['id'])&&'automation'===$item['source_type']&&in_array($item['status'],array('draft_created','scheduled','published'),true) ) { $post=get_post($item['wordpress_post_id']); if(!$post||'post'!==$post->post_type||'trash'===$post->post_status||absint(get_post_meta($post->ID,'_aics_article_id',true))!==$item['id']||sanitize_text_field((string)get_post_meta($post->ID,'_aics_article_uuid',true))!==$item['article_uuid']){ return $this->handle_post_failure($run,$token,array('code'=>'article_post_association_failed','retryable'=>false,'article_id'=>$item['id']),$result); } } }
+		$delivered = array_values( array_filter( $all, static fn($item)=>$item['profile_id']===absint($profile['id'])&&'automation'===$item['source_type']&&in_array($item['status'],array('draft_created','scheduled','published'),true)&&$item['wordpress_post_id']>0 ) );
+		if ( empty( $delivered ) ) { return $this->handle_post_failure( $run, $token, array('code'=>'no_approved_articles','retryable'=>false,'article_id'=>0), $result ); }
+		$settings=is_array($profile['publishing_settings']??null)?$profile['publishing_settings']:array();$rules=is_array($profile['workflow_rules']??null)?$profile['workflow_rules']:array();$mode=$settings['publishing_mode']??'draft';
+		$step='draft'===$mode?'finalize':(!empty($rules['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post'));
+		if ( ! ( $this->runs->refresh_lock( $run['id'], $token, 600 )['success'] ?? false ) ) { return $this->failed( $result, 'execution_lock_lost' ); }
+		if ( ! ( $this->runs->update_step( $run['id'], $token, $step )['success'] ?? false ) ) { return $this->failed( $result, 'run_step_update_failed' ); }
+		if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');} $result['code']='wordpress_drafts_ready'; return $result;
+	}
+
+	private function handle_post_failure( array $run, string $token, array $failure, array $result ): array {
+		$id=absint($failure['article_id']??0);$fresh=$this->runs->get_by_id($run['id']);$terminal=empty($failure['retryable'])||absint($fresh['attempt_count']??1)>=absint($fresh['max_attempts']??3);
+		if($id){$this->articles->update_error_code($id,$failure['code']??'wordpress_post_creation_failed',0);if($terminal){$article=$this->articles->get_by_id($id);if($article&&in_array($article['status'],array('approved','draft_created','scheduled','published'),true)){$this->articles->transition_status($id,array($article['status']),'needs_attention',array('updated_by'=>0,'error_code'=>'post_creation_retries_exhausted'));}}}
+		return $this->handle_failure($run,$token,$failure,$result);
 	}
 
 	private function article_step( array $profile, array $run, string $token, array $result ): array {

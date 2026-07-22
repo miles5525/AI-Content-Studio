@@ -136,6 +136,15 @@ final class AICS_Article_Repository {
 		return $this->get_articles( $args );
 	}
 
+	/** Returns one deterministically ordered approved automation article. */
+	public function get_next_approved_for_post_creation( $run_id, $profile_id ): ?array {
+		global $wpdb;
+		$run = absint( $run_id ); $profile = absint( $profile_id );
+		if ( 0 === $run || 0 === $profile ) { return null; }
+		$sql = $wpdb->prepare( "SELECT * FROM {$this->table()} WHERE run_id=%d AND profile_id=%d AND source_type='automation' AND status='approved' ORDER BY CASE WHEN planned_publish_at IS NULL THEN 1 ELSE 0 END ASC, planned_publish_at ASC, created_at ASC, id ASC LIMIT 1", $run, $profile );
+		return $this->normalize_row( $wpdb->get_row( $sql, ARRAY_A ) );
+	}
+
 	/** Stores content only after the existing article validator has sanitized it. */
 	public function store_generated_content( $article_id, array $article_data, $updated_by = 0 ): array {
 		global $wpdb;
@@ -265,7 +274,12 @@ final class AICS_Article_Repository {
 		if ( 'published' === $status ) { $set[] = 'published_at=%s'; $values[] = $now; }
 		$values[] = $id; $values[] = $post;
 		$changed = $wpdb->query( $wpdb->prepare( "UPDATE {$this->table()} SET " . implode( ',', $set ) . ' WHERE id=%d AND (wordpress_post_id IS NULL OR wordpress_post_id=%d)', $values ) );
-		return false === $changed ? self::simple( false, $id, 'database_update_failed' ) : self::simple( true, $id, 'wordpress_post_associated' );
+		if ( false === $changed ) { return self::simple( false, $id, 'database_update_failed' ); }
+		if ( 1 === $changed ) { return self::simple( true, $id, 'wordpress_post_associated' ); }
+		$fresh = $this->get_by_id( $id );
+		return $fresh && $fresh['wordpress_post_id'] === $post
+			? self::simple( true, $id, 'wordpress_post_associated' )
+			: self::simple( false, $id, 'article_post_reassociation_rejected' );
 	}
 
 	public function update_planned_publish_at( $article_id, $utc_datetime, $updated_by = 0 ): array {
