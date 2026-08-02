@@ -52,6 +52,7 @@ final class Installer {
 		$runs_table      = $wpdb->prefix . 'aics_automation_runs';
 		$ideas_table     = $wpdb->prefix . 'aics_content_ideas';
 		$articles_table  = $wpdb->prefix . 'aics_articles';
+		$actions_table   = $wpdb->prefix . 'aics_automation_run_actions';
 		$charset_collate = $wpdb->get_charset_collate();
 		$usage_sql       = "CREATE TABLE {$usage_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -224,6 +225,25 @@ final class Installer {
 			KEY created_at (created_at),
 			KEY updated_at (updated_at)
 		) {$charset_collate};";
+		$actions_sql     = "CREATE TABLE {$actions_table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			run_id bigint(20) unsigned NOT NULL,
+			action_type varchar(32) NOT NULL,
+			previous_status varchar(32) NOT NULL,
+			previous_step varchar(64) NOT NULL,
+			resulting_status varchar(32) NOT NULL,
+			resulting_step varchar(64) NOT NULL,
+			previous_attempt_count int(10) unsigned NOT NULL DEFAULT 0,
+			resulting_attempt_count int(10) unsigned NOT NULL DEFAULT 0,
+			actor_user_id bigint(20) unsigned NULL,
+			reason_code varchar(100) NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY run_id (run_id),
+			KEY action_type (action_type),
+			KEY actor_user_id (actor_user_id),
+			KEY created_at (created_at)
+		) {$charset_collate};";
 
 		$wpdb->last_error = '';
 		dbDelta( $usage_sql );
@@ -240,6 +260,9 @@ final class Installer {
 		$wpdb->last_error = '';
 		dbDelta( $articles_sql );
 		$articles_error = $wpdb->last_error;
+		$wpdb->last_error = '';
+		dbDelta( $actions_sql );
+		$actions_error = $wpdb->last_error;
 
 		$usage_exists    = $usage_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $usage_table ) ) );
 		$profiles_exists = $profiles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $profiles_table ) ) );
@@ -247,8 +270,9 @@ final class Installer {
 		$snapshot_exists = $runs_exists && null !== $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$runs_table} LIKE %s", 'configuration_snapshot' ) );
 		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
 		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
+		$actions_exists  = $actions_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $actions_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $actions_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}

@@ -59,6 +59,7 @@ final class Plugin {
 			\AICS_Settings_Page::register();
 			\AICS_Content_Studio_Page::register();
 			\AICS_Automations_Page::register();
+			\AICS_Automation_Runs_Page::register();
 			\AICS_Approvals_Page::register();
 		}
 	}

@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.9.0' );
-define( 'AICS_DB_VERSION', '0.8.0' );
+define( 'AICS_DB_VERSION', '0.9.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );
@@ -32,6 +32,7 @@ require_once AICS_PLUGIN_DIR . 'includes/database/class-installer.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-usage-log-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-profile-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-run-repository.php';
+require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-run-action-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-content-idea-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-article-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-settings.php';
@@ -48,6 +49,8 @@ require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-post-creator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-delivery-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-run-inspector.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-run-recovery-planner.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-run-control-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-worker.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-scheduler.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-system-check.php';

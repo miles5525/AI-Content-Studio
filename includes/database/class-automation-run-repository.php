@@ -113,6 +113,23 @@ final class AICS_Automation_Run_Repository {
 
 	public function table_exists():bool{global $wpdb;$table=$this->table();return $table===$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like($table)));}
 
+	/** Loads control state without exposing the lock token. */
+	public function get_run_for_control($run_id):?array{global $wpdb;$sql=$wpdb->prepare("SELECT ".self::COLUMNS.",(lock_token<>'') has_lock_token FROM {$this->table()} WHERE id=%d LIMIT 1",absint($run_id));$row=$wpdb->get_row($sql,ARRAY_A);if(!is_array($row)){return null;}$has=!empty($row['has_lock_token']);unset($row['has_lock_token']);$row=$this->normalize($row);if($row){$row['has_lock_token']=$has;}return $row;}
+
+	/** Strict administrator compare-and-swap transition; target values are planner-owned. */
+	public function atomic_control_transition(array $run,array $plan):bool{
+		global $wpdb;$id=absint($run['id']??0);$action=$plan['action']??'';$status=$plan['status']??'';$step=$plan['step']??'';
+		if(0===$id||!in_array($action,array('retry','resume','cancel'),true)||!in_array($status,array('queued','cancelled'),true)||!in_array($step,self::STEPS,true)){return false;}
+		$now=self::now();$sets=array('status=%s','current_step=%s','next_retry_at=NULL',"lock_token=''",'locked_at=NULL','lock_expires_at=NULL','updated_at=%s');$values=array($status,$step,$now);
+		if('cancel'===$action){$sets[]='completed_at=COALESCE(completed_at,%s)';$values[]=$now;$sets[]='active_profile_key=NULL';}
+		else{$sets[]='completed_at=NULL';$sets[]='active_profile_key=profile_id';if(!empty($plan['reset_attempts'])){$sets[]='attempt_count=0';}}
+		$values[]= $id;$values[]=(string)$run['status'];$values[]=(string)$run['current_step'];$values[]=(string)$run['updated_at'];$values[]=$now;
+		$profile_guard='cancel'===$action?'':" AND NOT EXISTS (SELECT 1 FROM (SELECT id FROM {$this->table()} WHERE active_profile_key=".$this->table().".profile_id AND id<>%d LIMIT 1) aics_other_active)";
+		if('cancel'!==$action){$values[]= $id;}
+		$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND status=%s AND current_step=%s AND updated_at=%s AND (lock_token='' OR lock_expires_at IS NULL OR lock_expires_at<=%s)".$profile_guard,$values);
+		return 1===$wpdb->query($sql);
+	}
+
 	private function worker_update($run_id,$token,array $data,array $formats,string $code):array{global $wpdb;$id=absint($run_id);$token=is_scalar($token)?(string)$token:'';if(0===$id||''===$token){return self::simple(false,$id,'invalid_lock');}$now=self::now();$sets=array();$values=array();$i=0;foreach($data as $field=>$value){if(null===$value){$sets[]="{$field}=NULL";}else{$sets[]="{$field}=".$formats[$i];$values[]=$value;}$i++;}$values[]=$id;$values[]=$token;$values[]=$now;$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND status='running' AND lock_token=%s AND lock_expires_at IS NOT NULL AND lock_expires_at>%s",$values);$changed=$wpdb->query($sql);return 1===$changed?self::simple(true,$id,$code):self::simple(false,$id,null===$this->get_by_id($id)?'run_not_found':'invalid_or_expired_lock');}
 	private function fail_exhausted(int $id,string $now):void{global $wpdb;$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='failed',active_profile_key=NULL,last_error_code='retries_exhausted',completed_at=%s,lock_token='',locked_at=NULL,lock_expires_at=NULL,next_retry_at=NULL,updated_at=%s WHERE id=%d AND status IN ('queued','retrying') AND attempt_count>=max_attempts",$now,$now,$id);$wpdb->query($sql);}
 	private function normalize($row):?array{if(!is_array($row)){return null;}foreach(array('id','profile_id','attempt_count','max_attempts') as $f){$row[$f]=absint($row[$f]??0);}$row['active_profile_key']=null===$row['active_profile_key']?null:absint($row['active_profile_key']);$row['trigger_type']=in_array($row['trigger_type']??'',self::TRIGGERS,true)?$row['trigger_type']:'scheduled';$row['status']=in_array($row['status']??'',self::STATUSES,true)?$row['status']:'failed';$row['current_step']=in_array($row['current_step']??'',self::STEPS,true)?$row['current_step']:'pending';foreach(array('locked_at','lock_expires_at','next_retry_at','started_at','completed_at') as $f){$row[$f]=self::datetime($row[$f]??null);}unset($row['lock_token']);return $row;}

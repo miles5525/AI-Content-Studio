@@ -143,6 +143,14 @@ final class AICS_Article_Repository {
 		return (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$this->table()} WHERE run_id=%d AND profile_id=%d AND source_type='automation' AND status IN ('draft_created','scheduled','published') AND wordpress_post_id IS NOT NULL AND wordpress_post_id>0",$run,$profile));
 	}
 
+	/** Requeues only empty terminal article placeholders during an audited manual retry. */
+	public function prepare_for_administrator_retry( $run_id, array $error_codes ): bool {
+		global $wpdb; $run=absint($run_id); $codes=array_values(array_unique(array_filter(array_map('sanitize_key',$error_codes))));
+		if(0===$run||!$codes){return false;}$marks=implode(',',array_fill(0,count($codes),'%s'));$values=array_merge(array(current_time('mysql',true),$run),$codes);
+		$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='queued',updated_at=%s WHERE run_id=%d AND status IN ('needs_attention','failed') AND title='' AND excerpt='' AND content='' AND last_error_code IN ({$marks})",$values);
+		$changed=$wpdb->query($sql);return false!==$changed;
+	}
+
 	/** Returns one deterministically ordered approved automation article. */
 	public function get_next_approved_for_post_creation( $run_id, $profile_id ): ?array {
 		global $wpdb;
