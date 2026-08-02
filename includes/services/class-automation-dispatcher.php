@@ -52,6 +52,7 @@ final class AICS_Automation_Dispatcher {
 			}
 			$result['due_profiles'] = count( $due );
 			$calculator             = new AICS_Schedule_Calculator();
+			$profile_service        = new AICS_Automation_Profile_Service( $profiles, $calculator );
 
 			foreach ( $due as $profile ) {
 				$profile_id = absint( $profile['id'] ?? 0 );
@@ -72,7 +73,32 @@ final class AICS_Automation_Dispatcher {
 					continue;
 				}
 
-				$created = $runs->create_run( $profile_id, array( 'trigger_type' => 'scheduled' ) );
+				$validation_input            = $fresh;
+				$validation_input['enabled'] = 'active' === $fresh['status'];
+				$validated                   = $profile_service->validate( $validation_input );
+				if ( empty( $validated['success'] ) ) {
+					++$result['profiles_failed'];
+					$result['code'] = 'run_configuration_snapshot_failed';
+					continue;
+				}
+				$normalized = $validated['data'];
+				$snapshot   = array(
+					'snapshot_version'    => 1,
+					'mode'                => $normalized['mode'],
+					'business_context'    => $normalized['business_context'],
+					'content_settings'    => $normalized['content_settings'],
+					'schedule_settings'   => $normalized['schedule_settings'],
+					'workflow_rules'      => $normalized['workflow_rules'],
+					'publishing_settings' => $normalized['publishing_settings'],
+				);
+				$snapshot_json = wp_json_encode( $snapshot );
+				if ( ! is_string( $snapshot_json ) || '' === $snapshot_json ) {
+					++$result['profiles_failed'];
+					$result['code'] = 'run_configuration_snapshot_failed';
+					continue;
+				}
+
+				$created = $runs->create_run( $profile_id, array( 'trigger_type' => 'scheduled', 'configuration_snapshot' => $snapshot_json ) );
 				if ( ! ( $created['success'] ?? false ) ) {
 					if ( 'active_run_exists' === ( $created['code'] ?? '' ) ) {
 						++$result['active_runs_skipped'];

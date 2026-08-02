@@ -24,6 +24,7 @@ final class AICS_Automations_Page {
 		?>
 		<div class="wrap aics-admin-wrap aics-automations-page">
 			<header class="aics-page-header"><h1 class="aics-page-title"><?php esc_html_e( 'Automations', 'ai-content-studio' ); ?></h1><p class="aics-page-description"><?php esc_html_e( 'Configure the persistent Autopilot or Approval Workflow profile. Approved automated articles are delivered as WordPress drafts; scheduling and publishing remain separate workflow steps.', 'ai-content-studio' ); ?></p></header>
+			<p class="aics-automation-info"><?php esc_html_e( 'Changes apply to new automation cycles. An existing cycle continues with the settings saved when it started.', 'ai-content-studio' ); ?></p>
 			<?php self::render_notice(); self::render_errors( $errors ); self::render_summary( $stored ); self::render_schedule_preview( $stored ); ?>
 			<form class="aics-automation-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">

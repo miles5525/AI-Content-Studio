@@ -820,6 +820,24 @@ Current limitations: `posts_per_period` does not yet distribute multiple same-da
 
 ## Important Instruction for Codex
 
+## Milestone 1 Blocker Repair Task 1 — Immutable Run Configuration
+
+The confirmed defect was reproduced from persistent evidence: run 25 completed while article 15 and WordPress post 73 remained a draft, despite final publishing approval having been enabled during that cycle. Later stages were reading the mutable current profile, allowing later profile edits to bypass the run's original approval rule.
+
+New automation runs now store a nullable `configuration_snapshot` LONGTEXT column in `aics_automation_runs`; database schema version is `0.8.0`. The JSON snapshot has `snapshot_version` 1 plus controlled `mode`, `business_context`, `content_settings`, `schedule_settings`, `workflow_rules`, and `publishing_settings` sections. It excludes credentials, nonces, prompts, responses, cookies, locks, emails, runtime errors, and profile runtime fields.
+
+The dispatcher validates and normalizes the due profile with `AICS_Automation_Profile_Service`, encodes the controlled snapshot with `wp_json_encode()`, validates it before insertion, and does not create a run or advance `next_run_at` when snapshot creation fails. `AICS_Automation_Run_Repository` centrally decodes snapshots through section/key allowlists and returns effective configuration with an explicit `snapshot` or `profile_fallback` source. Empty legacy snapshots use the current profile and report `legacy_profile_fallback=true`; malformed non-empty snapshots fail closed. Existing completed runs are not rewritten, and precise historical configuration cannot be recovered for legacy runs.
+
+The worker overlays only the effective run configuration onto live profile identity/runtime data, so idea generation/evaluation, article generation and routing, post author/category selection, final-approval routing, scheduling, publishing, and finalization use the saved cycle settings. Live profile status and runtime updates remain live policy. Profile edits are allowed and apply only to future cycles; the Automations page explains this behavior.
+
+Publishing approval lists are selected solely by queued `waiting_publish_approval` run state and derive their delivery label from effective run configuration. Publishing review and approval validate the saved approval requirement and publishing mode and route only to `schedule_post` or `publish_post`; browser input is not authoritative. Legacy waiting runs use the documented fallback.
+
+Finalization performs a second centralized readiness preflight before updating `last_run_at` or completing a run. It requires persistent non-rejected articles, valid owned WordPress posts, mode-appropriate article/post states, and prevents schedule/publish completion while final approval remains incomplete and posts are drafts. Controlled failures include `run_has_no_articles`, `run_has_no_posts`, `run_not_ready_to_finalize`, and `final_publish_approval_not_completed`.
+
+Files created: none. Files modified: `ai-content-studio.php`, `includes/database/class-installer.php`, `includes/database/class-automation-run-repository.php`, `includes/services/class-automation-dispatcher.php`, `includes/services/class-automation-worker.php`, `includes/services/class-approval-workflow-service.php`, `includes/admin/class-approvals-page.php`, `includes/admin/class-automations-page.php`, and `AI_CONTEXT.md`.
+
+Current limitations: legacy runs cannot recover historical configuration and deliberately use current-profile fallback; no existing completed run is repaired automatically. The unsafe article-content validator remains unchanged. The next repair task is **Milestone 1 Blocker Repair Task 2 — Article Safety Validation Diagnostics and Retry Recovery** and has not begun.
+
 Before making any code changes:
 
 1. Read `AI_CONTEXT.md`.

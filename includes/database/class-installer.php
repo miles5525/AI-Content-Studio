@@ -108,6 +108,7 @@ final class Installer {
 			trigger_type varchar(30) NOT NULL DEFAULT 'scheduled',
 			status varchar(30) NOT NULL DEFAULT 'queued',
 			current_step varchar(50) NOT NULL DEFAULT 'pending',
+			configuration_snapshot longtext NULL,
 			lock_token varchar(64) NOT NULL DEFAULT '',
 			locked_at datetime NULL,
 			lock_expires_at datetime NULL,
@@ -243,10 +244,11 @@ final class Installer {
 		$usage_exists    = $usage_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $usage_table ) ) );
 		$profiles_exists = $profiles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $profiles_table ) ) );
 		$runs_exists     = $runs_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $runs_table ) ) );
+		$snapshot_exists = $runs_exists && null !== $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$runs_table} LIKE %s", 'configuration_snapshot' ) );
 		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
 		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && $usage_exists && $profiles_exists && $runs_exists && $ideas_exists && $articles_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}

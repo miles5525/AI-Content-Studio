@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.9.0' );
-define( 'AICS_DB_VERSION', '0.7.0' );
+define( 'AICS_DB_VERSION', '0.8.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );

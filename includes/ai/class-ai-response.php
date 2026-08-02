@@ -59,7 +59,7 @@ final class AICS_AI_Response {
 
 	public function is_success(): bool {
 		return $this->success;
-	}
+	}	
 
 	public function get_data(): ?array {
 		return $this->data;
