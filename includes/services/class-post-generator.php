@@ -40,11 +40,8 @@ final class AICS_Post_Generator {
 	 * @return array{title:string,content:string,excerpt:string}|WP_Error
 	 */
 	public function prepare_generated_article( array $article ) {
-		return $this->prepare(
-			$article['title'] ?? '',
-			$article['excerpt'] ?? '',
-			$article['content'] ?? ''
-		);
+		$result = ( new AICS_Article_Content_Validator() )->validate( $article );
+		return $result['success'] ? $result['article'] : new WP_Error( $result['code'], __( 'The generated article did not pass validation.', 'ai-content-studio' ), $result['diagnostics'] );
 	}
 
 	/**
@@ -53,30 +50,9 @@ final class AICS_Post_Generator {
 	 * @param array<string,mixed> $article Generated structured data.
 	 * @return array{title:string,content:string,excerpt:string}|WP_Error
 	 */
-	public function validate_and_prepare_article( array $article ) {
-		$content = $article['content'] ?? null;
-		if ( ! is_string( $content ) ) {
-			return new WP_Error( 'invalid_article_structure', __( 'The generated article structure is invalid.', 'ai-content-studio' ) );
-		}
-
-		$unsafe_patterns = array(
-			'/<(script|style|iframe|form|input|embed|svg)\b/i',
-			'/\son[a-z]+\s*=/i',
-			'/\sstyle\s*=/i',
-			'/\b(?:javascript|data)\s*:/i',
-			'/\[(?:insert|add|replace|write)[^\]]*\]/i',
-			'/\bTODO\b/i',
-			'/\blorem ipsum\b/i',
-			'/\b(?:model|provider) error\b/i',
-			'/^\s*\{\s*"article"\s*:/i',
-		);
-		foreach ( $unsafe_patterns as $pattern ) {
-			if ( preg_match( $pattern, $content ) ) {
-				return new WP_Error( 'unsafe_article_content', __( 'The generated article contains unsafe or incomplete content.', 'ai-content-studio' ) );
-			}
-		}
-
-		return $this->prepare_generated_article( $article );
+	public function validate_and_prepare_article( array $article, string $requested_length = '' ) {
+		$result = ( new AICS_Article_Content_Validator() )->validate( $article, $requested_length );
+		return $result['success'] ? $result['article'] : new WP_Error( $result['code'], __( 'The generated article did not pass validation.', 'ai-content-studio' ), $result['diagnostics'] );
 	}
 
 	/**

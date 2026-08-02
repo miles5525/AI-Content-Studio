@@ -212,6 +212,17 @@ final class AICS_Article_Repository {
 		return array( 'success' => true, 'article_id' => $id, 'attempt_count' => $count, 'code' => 'generation_attempt_incremented' );
 	}
 
+	/** Atomically returns an empty in-progress placeholder to its retry queue. */
+	public function prepare_generation_retry( $article_id, $error_code, $updated_by = 0 ): array {
+		global $wpdb;
+		$id=absint($article_id);$code=self::error_code($error_code);$user=self::nonnegative($updated_by);$article=$this->get_by_id($id);
+		if(!$article){return self::simple(false,0,'article_not_found');}if(''===$code||null===$user){return self::simple(false,$id,'invalid_error_code');}
+		if('queued'===$article['status']&&''===$article['title']&&''===$article['excerpt']&&''===$article['content']){return self::simple(true,$id,'article_ready_for_retry');}
+		if('generating'!==$article['status']||''!==$article['title']||''!==$article['excerpt']||''!==$article['content']){return self::simple(false,$id,'article_retry_conflict');}
+		$now=self::now();$sql=$wpdb->prepare("UPDATE {$this->table()} SET status='queued',last_error_code=%s,updated_by=%d,updated_at=%s WHERE id=%d AND status='generating' AND title='' AND excerpt='' AND content=''",$code,$user,$now,$id);$changed=$wpdb->query($sql);
+		return 1===$changed?self::simple(true,$id,'article_ready_for_retry'):self::simple(false,$id,'article_retry_conflict');
+	}
+
 	public function transition_status( $article_id, array $from_statuses, $to_status, array $context = array() ): array {
 		global $wpdb;
 		$id = absint( $article_id );

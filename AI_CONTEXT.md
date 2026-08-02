@@ -820,6 +820,24 @@ Current limitations: `posts_per_period` does not yet distribute multiple same-da
 
 ## Important Instruction for Codex
 
+## Milestone 1 Blocker Repair Task 2 — Article Safety Validation Diagnostics and Retry Recovery
+
+The confirmed failure path was `AICS_AI_Engine::generate_automation_article()` → `AICS_Post_Generator::validate_and_prepare_article()`. The old validator returned only `unsafe_article_content` for both active markup and several incomplete-content patterns. It also treated raw-pattern matching as a broad decision boundary. After that response, the worker scheduled a retry without returning the empty persistent article from `generating`, leaving article 16 and idea 53 in their in-progress states.
+
+`AICS_Article_Content_Validator` is now the shared generated-article validation policy for Manual Studio, automated generation, and generated article preparation before WordPress draft creation. It returns structured success/failure results, controlled codes, a sanitized article only on success, and bounded diagnostics containing categories, wrapper/sanitization booleans, and word counts—never content or matched fragments. The established `wp_kses()` allowlist remains unchanged: paragraphs, H2–H4, lists, strong/emphasis, blockquotes, and links with only `href`/`title`.
+
+Raw content is pre-scanned for scripts, styles, embeds, forms/inputs/buttons, active document metadata, event handlers, scriptable URL schemes, dangerous data URLs, and SVG. These receive precise codes such as `unsafe_script_element`, `unsafe_event_handler`, `unsafe_url_scheme`, and `unsafe_svg_content`. Markdown fences and safe document wrappers are removed before sanitization. Harmless wrappers, unsupported elements, and unsupported attributes may be removed, with only sanitized content accepted. Meaningful text, placeholders, raw JSON wrappers, field lengths, the 100,000-character maximum, and broad short/medium/long minimums of 200/350/600 words are validated.
+
+Retry policy now preserves the existing article ID and UUID. A retryable article-generation failure atomically moves an empty `generating` placeholder to `queued`, stores the precise error code, keeps its idea at `article_generating`, and leaves the run at `generate_article` for the existing 15/60/240-minute schedule. Deterministic selection prioritizes empty queued placeholders owned by `article_generating` ideas, then legacy empty `generating` placeholders, then new queued ideas. No provider call occurs during status repair, and `generation_attempts` remains incremented exactly once immediately before each real generation request. Successful storage clears the article error through the existing repository write and advances the idea to `article_generated`.
+
+When retry handling is terminal, an empty queued/generating article moves to `needs_attention` with the latest precise code. The run follows the existing terminal failure path, clears its active profile key and lock state, and preserves the related idea at `article_generating` for diagnosis. No activation migration or automatic mutation of run 26/article 16/idea 53 is performed.
+
+Automation usage logs retain one row per real provider request and may add only an allowlisted `validation_category` alongside source, requested length, and tone. Article content, title, prompt, provider response, business context, credentials, and locks remain excluded.
+
+Files created: `includes/services/class-article-content-validator.php`. Files modified: `ai-content-studio.php`, `includes/services/class-post-generator.php`, `includes/ai/class-ai-engine.php`, `includes/services/class-automation-article-generator.php`, `includes/services/class-automation-worker.php`, `includes/services/class-usage-logger.php`, `includes/database/class-article-repository.php`, `includes/database/class-content-idea-repository.php`, and `AI_CONTEXT.md`. No schema change was required; schema version remains `0.8.0`. Immutable run configuration is unchanged.
+
+Current limitations: no regeneration UI, retry button, run-history page, or raw-content diagnostic storage exists. The next repair task has not been started.
+
 ## Milestone 1 Blocker Repair Task 1 — Immutable Run Configuration
 
 The confirmed defect was reproduced from persistent evidence: run 25 completed while article 15 and WordPress post 73 remained a draft, despite final publishing approval having been enabled during that cycle. Later stages were reading the mutable current profile, allowing later profile edits to bypass the run's original approval rule.

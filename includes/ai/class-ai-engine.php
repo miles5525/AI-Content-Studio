@@ -86,7 +86,7 @@ final class AICS_AI_Engine {
 				return AICS_AI_Response::failure( 'invalid-article-structure', __( 'The generated article structure is invalid.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
 			}
 		}
-		$article = $this->post_generator->validate_and_prepare_article( $data['article'] );
+		$article = $this->post_generator->validate_and_prepare_article( $data['article'], sanitize_key( (string) ( $content_settings['article_length'] ?? '' ) ) );
 		if ( is_wp_error( $article ) ) {
 			return AICS_AI_Response::failure( $article->get_error_code(), __( 'The generated article did not pass validation.', 'ai-content-studio' ), $response->get_provider_name(), $response->get_http_status_code() );
 		}
