@@ -154,7 +154,12 @@ final class AICS_Settings {
 	 * @return void
 	 */
 	private static function persist( array $settings ): void {
-		if ( false === get_option( self::OPTION_NAME, false ) ) {
+		$stored = get_option( self::OPTION_NAME, false );
+		if ( is_array( $stored ) ) {
+			$settings = array_merge( $stored, $settings );
+		}
+
+		if ( false === $stored ) {
 			add_option( self::OPTION_NAME, $settings, '', false );
 			return;
 		}

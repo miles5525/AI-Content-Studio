@@ -958,3 +958,21 @@ Files repaired: `ai-content-studio.php`, `includes/database/class-installer.php`
 Validation used an exact disposable missing-index simulation at stored version `0.10.0`. A normal WordPress bootstrap restored the index, advanced to `0.10.1`, left 12 article image columns and exactly two requested indexes, and left content ideas with zero featured-image columns or indexes. Existing article defaults remained safe. Full PHP lint, repeated bootstrap, activation/deactivation, admin-page rendering, attachment/thumbnail counts, and the WordPress debug log were also checked.
 
 Task 1.1 is complete after this blocker repair. V1 Task 1.2 has not begun.
+
+## V1 Task 1.2 — Image Provider Settings and Provider-Agnostic Generation Interface
+
+Task 1.1 remains complete and tested at database schema `0.10.1`. Task 1.2 adds the shared settings and provider-abstraction portion of the Featured Image Pipeline only. It does not connect image generation to Manual Studio, automation workers, articles, WordPress posts, or media handling.
+
+Global defaults are stored as a controlled `featured_images` section inside the existing non-autoloaded `aics_settings` option: generation disabled, provider `openai`, model `gpt-image-2`, landscape aspect ratio, standard quality, and PNG output. Supported aspect ratios are landscape, square, and portrait; qualities are standard and high; formats are PNG, JPEG, and WebP. Existing text settings writes preserve the nested image section.
+
+The OpenAI image adapter reuses the existing `openai_api_key` credential accessor. No duplicate credential field or option exists, and the credential is never returned by the image adapter, factory, request, result, capabilities, or rendered image-settings section. The existing text-provider Test Connection is unchanged.
+
+`AICS_Image_Provider_Interface` defines provider identity, display name, configuration state and validation, controlled capabilities, and normalized generation. `AICS_Image_Provider_Factory` uses a strict internal provider-key-to-class registry and rejects unknown keys; it never derives a class or path from browser data. `AICS_OpenAI_Image_Provider` reports supported models, ratios, quality levels, formats, prompt-revision support, and output types. Its `generate()` method returns the controlled failure `image_generation_not_implemented` and performs no HTTP request.
+
+`AICS_Image_Generation_Request` is an immutable, non-persisting value object with a positive optional article ID, bounded plain-text prompt, strict provider/model identifiers, and allowlisted aspect ratio, quality, and format. It accepts no credentials, headers, URL, or filesystem path. `AICS_Image_Generation_Result` structurally represents controlled success or failure metadata without storing binary/base64 content, signed URLs, authorization data, or raw responses. Unsafe URL/data references are rejected.
+
+`AICS_Featured_Image_Settings` owns defaults, normalization, strict provider-capability validation, persistence of the nested option section, effective settings, and controlled configuration status. It never renders HTML, reads request globals, calls a provider, or exposes credentials. The Settings page owns capability and nonce enforcement and presents a separate Featured Images form, credential-reuse explanation, and controlled status. Invalid provider, model, ratio, quality, or format submissions do not change image settings.
+
+Files created: `includes/providers/interface-image-provider.php`, `includes/providers/class-image-provider-factory.php`, `includes/providers/class-openai-image-provider.php`, `includes/services/class-image-generation-request.php`, `includes/services/class-image-generation-result.php`, and `includes/services/class-featured-image-settings.php`. Files modified: `ai-content-studio.php`, `includes/services/class-settings.php`, `includes/admin/class-settings-page.php`, and `AI_CONTEXT.md`. No database schema or asset change is required.
+
+Current limitations: there is no real image request, prompt builder, generation service, download, base64 decoding, filesystem write, Media Library upload, attachment creation, featured-image assignment, regeneration, approval, Manual control, or automation image step. Next task: **V1 Task 1.3 — Featured Image Prompt Builder and Image Generation Service**. It has not begun.
