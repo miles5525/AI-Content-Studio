@@ -906,4 +906,55 @@ Run Details now presents eligible Retry Now, Resume Run, and Cancel Run forms wi
 
 Files created: `includes/services/class-automation-run-control-service.php`, `includes/services/class-automation-run-recovery-planner.php`, and `includes/database/class-automation-run-action-repository.php`. Files modified: `ai-content-studio.php`, `includes/core/class-plugin.php`, `includes/database/class-installer.php`, `includes/database/class-automation-run-repository.php`, `includes/database/class-article-repository.php`, `includes/services/class-automation-run-inspector.php`, `includes/admin/class-automation-runs-page.php`, `uninstall.php`, and `AI_CONTEXT.md`.
 
-Current limitations: action history begins with this schema; publishing approval has no separate durable approval audit and therefore cannot be reconstructed while a run remains at its waiting step; browser/cron acceptance scenarios still require disposable configured runs and normal background worker execution. Next planned task: **Milestone 2 Task 3 — Automation Health Monitoring and Stale Run Detection**. It has not begun.
+
+## Milestone 2 Task 3 — Automation Health Monitoring and Stale Run Detection
+
+Milestone 2 Task 2 is complete and its safe controls were validated with disposable cancellation and failed-retry runs, including compare-and-swap double-submit protection, profile reservation handling, attempt auditing, and active-lock refusal. Task 3 adds centralized read-only automation health monitoring. It never retries, resumes, cancels, clears locks, releases reservations, modifies profiles, changes posts, executes the dispatcher or worker, or calls an AI provider. Recovery remains exclusively available through the Task 2 Run Details controls.
+
+`AICS_Automation_Health_Monitor` loads bounded candidates, profiles, batch post associations, and cron state; invokes the detector; calculates `healthy`, `warning`, `critical`, or `unknown`; and persists a safe snapshot. A five-minute option lock prevents concurrent scans. Queries are capped at 100 candidates, findings at 50, and affected run/profile IDs at 20, with truncation disclosed.
+
+`AICS_Automation_Stale_Run_Detector` owns UTC defaults: 10 minutes for running without a valid lock, 30 minutes for queued executable runs, 15 minutes after retry time, 30 minutes for overdue profiles without runs, and two hours for snapshot freshness. Approval waits and recent states are excluded.
+
+Findings cover stale/lockless running, stalled queued, overdue or malformed retries, terminal/failed reservation conflicts, multiple active runs, reservation mismatch, overdue profiles, missing/conflicting posts, unknown active steps, incomplete completion, and missing dispatcher/worker/health cron events. Failed runs normally release reservations, so retention is critical. Ownership reuses `AICS_Automation_Delivery_Service`.
+
+The hourly `aics_automation_health_check` hook uses the existing scheduler, is unique, clears on deactivation, and is recreated on activation/initialization. The non-autoloaded `aics_automation_health_snapshot` schema 1 contains only controlled bounded operational data and no credentials, lock tokens, prompts, responses, content, business context, personal request data, raw SQL/provider errors, or snapshots.
+
+Automation Runs exposes a mutation-free Health view. Run Details shows advisory findings before authoritative controls; Needs Attention includes affected IDs without duplicates. Dashboard and System Status use the cached snapshot. One capability-protected critical notice appears only on AI Content Studio pages.
+
+Files created: `includes/services/class-automation-health-monitor.php` and `includes/services/class-automation-stale-run-detector.php`. Files modified: `ai-content-studio.php`, scheduler, run/profile/article repositories, run inspector/page, Dashboard, System Status, admin CSS, uninstall cleanup, and `AI_CONTEXT.md`. No schema change was required.
+
+Current limitations: findings are advisory snapshots; scans are deliberately bounded; browser responsive/console and full cron/provider regressions remain manual. Next planned task: **Milestone 2 Task 4 — Private Beta Diagnostics Export and Support Bundle**. It has not begun.
+
+## Locked V1 Roadmap and V1 Task 1.1 — Shared Featured Image Foundation
+
+The locked V1 roadmap is: (1) Featured Image Pipeline, (2) SEO and Publishing Metadata, (3) Manual and Automation Parity, and (4) feature-completion regression. V1 Task 1 has started. Task 1.1 is implemented as a persistence and lifecycle foundation only.
+
+`AICS_Featured_Image_State` is the centralized policy for `not_requested`, `pending`, `generating`, `uploaded`, `attached`, `retrying`, `failed`, `needs_attention`, and `skipped`. Unknown values normalize to `needs_attention`, never to success. Allowed transitions are: `not_requested` to `pending` or `skipped`; `pending` to `generating`, `skipped`, or `failed`; `generating` to `uploaded`, `retrying`, `failed`, or `needs_attention`; `retrying` to `generating`, `failed`, or `needs_attention`; `failed` to `pending`, `needs_attention`, or `skipped`; `needs_attention` to `pending` or `skipped`; `uploaded` to `attached`, `retrying`, `failed`, or `needs_attention`; and `skipped` to `pending`. `attached` is terminal. `skipped` is normally terminal but supports a future explicit administrator return to `pending`.
+
+The shared article record now stores `featured_image_required`, `featured_image_status`, `featured_image_attachment_id`, `featured_image_prompt`, `featured_image_alt_text`, `featured_image_provider`, `featured_image_model`, `featured_image_attempts`, `featured_image_generated_at`, `featured_image_uploaded_at`, `featured_image_attached_at`, and `featured_image_last_error_code`. Existing rows default safely to not required, `not_requested`, zero attempts, and no attachment. Image timestamps follow the project's UTC MySQL timestamp convention. Indexes cover image status and attachment ID. Database schema version is `0.10.1` after the Task 1.1 migration blocker repair.
+
+`AICS_Article_Repository` exposes focused read, initialization, compare-and-swap transition, idempotent attachment association, and controlled error-recording operations. Statuses and changed fields are allowlisted, IDs use absolute-integer validation, and state changes match the expected stored status. Re-associating the same attachment is a successful no-op; a different attachment cannot overwrite an attached image. A future replacement requires a separate explicit controlled operation.
+
+Controlled future pipeline errors are limited to provider request failure, timeout, rate limiting, invalid response, unsupported format, download failure, file-validation failure, Media Library upload failure, attachment-persistence failure, assignment failure, ownership conflict, and retry exhaustion. Only codes are persisted; unknown codes receive a generic safe label. Raw provider messages and database errors are not stored.
+
+No provider request, image generation, download, Media Library upload, featured-image assignment, post mutation, image UI, or automation worker image step exists in Task 1.1. No API key, authorization header, temporary URL, binary/base64 image, provider response, nonce, cookie, administrator email, IP address, or browser user agent is stored by this foundation.
+
+Manual Studio currently uses transient request state and creates a WordPress draft directly; it does not persist Manual articles in `aics_articles`. Automation articles do use `aics_articles`. Task 1.1 deliberately creates one shared schema, state policy, and repository rather than parallel Manual/Automation models. Persisting Manual Studio through that shared model remains V1 Task 3.
+
+File created: `includes/services/class-featured-image-state.php`. Files modified for Task 1.1: `ai-content-studio.php`, `includes/database/class-installer.php`, `includes/database/class-article-repository.php`, and `AI_CONTEXT.md`. Deactivation and uninstall data policy are unchanged and continue to preserve plugin tables and image metadata.
+
+Current limitations: there is no image provider configuration or provider abstraction, generation, media upload, attachment ownership verification against WordPress, thumbnail assignment, regeneration, approval, or UI. Next task: **V1 Task 1.2 — Image Provider Settings and Provider-Agnostic Generation Interface**. It has not begun.
+
+## V1 Task 1.1 Migration Blocker Repair
+
+The Task 1.1 migration blocker was caused by the two featured-image `KEY` declarations being placed inside the `aics_content_ideas` `CREATE TABLE` SQL during an earlier migration attempt, while their columns existed only in the `aics_articles` definition. `dbDelta()` therefore attempted to add `featured_image_status` and `featured_image_attachment_id` indexes to the ideas table and MySQL rejected both because those columns were not defined there.
+
+The corrected installer keeps all 12 `featured_image_*` columns and both matching indexes exclusively in the articles-table SQL. The content-ideas SQL retains its prior columns and indexes and contains no featured-image declaration. Every `KEY` in both definitions now references a column in its own `CREATE TABLE` statement.
+
+Database repair schema version `0.10.1` ensures a site whose option already advanced to the affected `0.10.0` state automatically re-enters the existing `dbDelta()` upgrade on the next WordPress `init`; no manual option edit is required. The version is written only after the installer verifies all 12 strict article column names and verifies exactly one single-column `featured_image_status` index and one single-column `featured_image_attachment_id` index on `aics_articles`. Missing columns, missing indexes, or another failed `dbDelta()` leave the stored version behind so a later page load retries safely. Repeated loads, activation, and reactivation remain idempotent.
+
+Files repaired: `ai-content-studio.php`, `includes/database/class-installer.php`, and `AI_CONTEXT.md`. The state service and article repository remain unchanged by this blocker repair. No ideas, articles, runs, approvals, WordPress posts, attachments, or thumbnail metadata are deleted or rewritten.
+
+Validation used an exact disposable missing-index simulation at stored version `0.10.0`. A normal WordPress bootstrap restored the index, advanced to `0.10.1`, left 12 article image columns and exactly two requested indexes, and left content ideas with zero featured-image columns or indexes. Existing article defaults remained safe. Full PHP lint, repeated bootstrap, activation/deactivation, admin-page rendering, attachment/thumbnail counts, and the WordPress debug log were also checked.
+
+Task 1.1 is complete after this blocker repair. V1 Task 1.2 has not begun.

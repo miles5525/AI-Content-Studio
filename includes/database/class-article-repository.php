@@ -71,6 +71,10 @@ final class AICS_Article_Repository {
 			'rejected_by'         => 0,
 			'rejection_code'      => '',
 			'last_error_code'     => '',
+			'featured_image_required' => 0,
+			'featured_image_status' => 'not_requested',
+			'featured_image_attachment_id' => null,
+			'featured_image_attempts' => 0,
 			'created_by'          => $created_by,
 			'updated_by'          => $created_by,
 			'created_at'          => $now,
@@ -136,6 +140,7 @@ final class AICS_Article_Repository {
 		return $this->get_articles( $args );
 	}
 	public function aggregate_for_run_ids(array $run_ids):array{global $wpdb;$ids=array_values(array_unique(array_filter(array_map('absint',$run_ids))));if(!$ids){return array();}$marks=implode(',',array_fill(0,count($ids),'%d'));$sql=$wpdb->prepare("SELECT run_id,COUNT(*) articles,SUM(wordpress_post_id IS NOT NULL AND wordpress_post_id>0) posts FROM {$this->table()} WHERE run_id IN ({$marks}) GROUP BY run_id",$ids);$out=array();foreach($wpdb->get_results($sql,ARRAY_A) as $row){$out[absint($row['run_id'])]=array('articles'=>absint($row['articles']),'posts'=>absint($row['posts']));}return $out;}
+	public function get_post_associations_for_health(array $run_ids,$limit=100):array{global $wpdb;$ids=array_slice(array_values(array_unique(array_filter(array_map('absint',$run_ids)))),0,100);if(!$ids){return array();}$limit=max(1,min(100,absint($limit)));$marks=implode(',',array_fill(0,count($ids),'%d'));$values=array_merge($ids,array($limit+1));$sql=$wpdb->prepare("SELECT id,article_uuid,run_id,profile_id,status,wordpress_post_id FROM {$this->table()} WHERE run_id IN ({$marks}) AND wordpress_post_id IS NOT NULL AND wordpress_post_id>0 ORDER BY run_id,id LIMIT %d",$values);return $wpdb->get_results($sql,ARRAY_A)?:array();}
 
 	/** Counts downstream articles with a native post association for one run/profile. */
 	public function count_associated_posts_for_run( $run_id, $profile_id ): int {
@@ -342,6 +347,47 @@ final class AICS_Article_Repository {
 		return false === $changed ? self::simple( false, $id, 'database_update_failed' ) : self::simple( true, $id, 'article_error_updated' );
 	}
 
+	/** Returns only the shared featured-image persistence fields. */
+	public function get_featured_image_data( $article_id ): ?array {
+		$article=$this->get_by_id(absint($article_id));if(!$article){return null;}
+		$fields=array('featured_image_required','featured_image_status','featured_image_attachment_id','featured_image_prompt','featured_image_alt_text','featured_image_provider','featured_image_model','featured_image_attempts','featured_image_generated_at','featured_image_uploaded_at','featured_image_attached_at','featured_image_last_error_code');return array_intersect_key($article,array_fill_keys($fields,true));
+	}
+
+	/** Initializes the image lifecycle once without generating or uploading an image. */
+	public function initialize_featured_image( $article_id, array $image_data ): array {
+		global $wpdb;
+		$id = absint( $article_id ); $article = $this->get_by_id( $id );
+		if ( ! $article ) { return self::simple( false, 0, 'article_not_found' ); }
+		$required = filter_var( $image_data['required'] ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE );
+		if ( null === $required ) { return self::simple( false, $id, 'invalid_featured_image_required' ); }
+		$target = $required ? 'pending' : 'skipped';
+		if ( ! AICS_Featured_Image_State::can_transition( $article['featured_image_status'], $target ) ) { return self::simple( false, $id, 'featured_image_transition_rejected' ); }
+		$prompt = self::nullable_text( $image_data['prompt'] ?? null, 5000 ); $alt = self::nullable_text( $image_data['alt_text'] ?? null, 1000 );
+		if ( false === $prompt || false === $alt ) { return self::simple( false, $id, 'invalid_featured_image_metadata' ); }
+		$sets = array( 'featured_image_required=%d', 'featured_image_status=%s', 'featured_image_prompt=' . ( null === $prompt ? 'NULL' : '%s' ), 'featured_image_alt_text=' . ( null === $alt ? 'NULL' : '%s' ), 'featured_image_last_error_code=NULL', 'updated_at=%s' );
+		$values = array( $required ? 1 : 0, $target ); if ( null !== $prompt ) { $values[] = $prompt; } if ( null !== $alt ) { $values[] = $alt; } $values[] = self::now(); $values[] = $id;
+		$sql = $wpdb->prepare( "UPDATE {$this->table()} SET " . implode( ',', $sets ) . " WHERE id=%d AND featured_image_status='not_requested'", $values );
+		$changed = $wpdb->query( $sql );
+		return 1 === $changed ? self::simple( true, $id, 'featured_image_initialized' ) : self::simple( false, $id, false === $changed ? 'database_update_failed' : 'featured_image_state_changed' );
+	}
+
+	/** Performs a strict compare-and-swap image-state transition. */
+	public function atomic_transition_featured_image_status( $article_id, $expected_status, $resulting_status, array $changes=array() ): array {
+		global $wpdb;$id=absint($article_id);if(0===$id||!AICS_Featured_Image_State::is_supported($expected_status)||!AICS_Featured_Image_State::is_supported($resulting_status)){return self::simple(false,$id,'invalid_featured_image_status');}$expected=sanitize_key((string)$expected_status);$result=sanitize_key((string)$resulting_status);if(!AICS_Featured_Image_State::can_transition($expected,$result)){return self::simple(false,$id,'featured_image_transition_rejected');}
+		$allowed=array('featured_image_prompt'=>5000,'featured_image_alt_text'=>1000,'featured_image_provider'=>64,'featured_image_model'=>100);$sets=array('featured_image_status=%s');$values=array($result);
+		foreach($changes as $field=>$value){if(isset($allowed[$field])){$clean=self::nullable_text($value,$allowed[$field]);if(false===$clean){return self::simple(false,$id,'invalid_featured_image_metadata');}$sets[]=$field.'='.(null===$clean?'NULL':'%s');if(null!==$clean){$values[]=$clean;}}elseif('featured_image_attempts'===$field){$attempts=self::nonnegative($value);if(null===$attempts){return self::simple(false,$id,'invalid_featured_image_attempts');}$sets[]='featured_image_attempts=%d';$values[]=$attempts;}elseif(in_array($field,array('featured_image_generated_at','featured_image_uploaded_at'),true)){$date=self::datetime($value);if(null===$date){return self::simple(false,$id,'invalid_featured_image_timestamp');}$sets[]="{$field}=%s";$values[]=$date;}elseif('featured_image_last_error_code'===$field){$code=is_scalar($value)?sanitize_key((string)$value):'';if(''!==$code&&!AICS_Featured_Image_State::is_error_supported($code)){return self::simple(false,$id,'invalid_featured_image_error_code');}$sets[]='featured_image_last_error_code='.(''===$code?'NULL':'%s');if(''!==$code){$values[]=$code;}}else{return self::simple(false,$id,'invalid_featured_image_change');}}
+		$now=self::now();$sets[]='updated_at=%s';$values[]=$now;$values[]=$id;$values[]=$expected;$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND featured_image_status=%s",$values);$changed=$wpdb->query($sql);return 1===$changed?self::simple(true,$id,'featured_image_status_updated'):self::simple(false,$id,false===$changed?'database_update_failed':(null===$this->get_by_id($id)?'article_not_found':'featured_image_state_changed'));
+	}
+
+	/** Idempotently associates one attachment and advances uploaded to attached. */
+	public function associate_featured_image_attachment( $article_id, $expected_status, $attachment_id, array $metadata=array() ): array {
+		global $wpdb;$id=absint($article_id);$attachment=absint($attachment_id);if(0===$id||0===$attachment){return self::simple(false,$id,'invalid_featured_image_attachment');}$article=$this->get_by_id($id);if(!$article){return self::simple(false,0,'article_not_found');}$current=absint($article['featured_image_attachment_id']);if('attached'===$article['featured_image_status']&&$current===$attachment){return self::simple(true,$id,'featured_image_attachment_already_associated');}if($current&&$current!==$attachment){return self::simple(false,$id,'featured_image_attachment_conflict');}
+		$expected=AICS_Featured_Image_State::is_supported($expected_status)?sanitize_key((string)$expected_status):'';if('uploaded'!==$expected||!AICS_Featured_Image_State::can_transition($expected,'attached')){return self::simple(false,$id,'featured_image_transition_rejected');}
+		$alt=self::nullable_text($metadata['alt_text']??$article['featured_image_alt_text'],1000);if(false===$alt){return self::simple(false,$id,'invalid_featured_image_metadata');}$now=self::now();$sets=array("featured_image_status='attached'",'featured_image_attachment_id=%d','featured_image_alt_text='.(null===$alt?'NULL':'%s'),'featured_image_attached_at=COALESCE(featured_image_attached_at,%s)','featured_image_last_error_code=NULL','updated_at=%s');$values=array($attachment);if(null!==$alt){$values[]=$alt;}$values[]=$now;$values[]=$now;$values[]=$id;$values[]=$expected;$values[]=$attachment;$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND featured_image_status=%s AND (featured_image_attachment_id IS NULL OR featured_image_attachment_id=%d)",$values);$changed=$wpdb->query($sql);if(1===$changed){return self::simple(true,$id,'featured_image_attachment_associated');}if(false===$changed){return self::simple(false,$id,'database_update_failed');}$fresh=$this->get_by_id($id);return $fresh&&'attached'===$fresh['featured_image_status']&&$attachment===$fresh['featured_image_attachment_id']?self::simple(true,$id,'featured_image_attachment_already_associated'):self::simple(false,$id,'featured_image_state_changed');
+	}
+
+	public function record_featured_image_error( $article_id, $expected_status, $resulting_status, $controlled_error_code ): array {$code=is_scalar($controlled_error_code)?sanitize_key((string)$controlled_error_code):'';if(!AICS_Featured_Image_State::is_error_supported($code)){return self::simple(false,absint($article_id),'invalid_featured_image_error_code');}return $this->atomic_transition_featured_image_status($article_id,$expected_status,$resulting_status,array('featured_image_last_error_code'=>$code));}
+
 	public function table_exists(): bool {
 		global $wpdb;
 		$table = $this->table();
@@ -383,16 +429,18 @@ final class AICS_Article_Repository {
 
 	private function normalize_row( $row ): ?array {
 		if ( ! is_array( $row ) ) { return null; }
-		foreach ( array( 'id', 'idea_id', 'profile_id', 'run_id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by' ) as $field ) { $row[ $field ] = absint( $row[ $field ] ?? 0 ); }
+		foreach ( array( 'id', 'idea_id', 'profile_id', 'run_id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by', 'featured_image_required', 'featured_image_attempts' ) as $field ) { $row[ $field ] = absint( $row[ $field ] ?? 0 ); }
 		$row['wordpress_post_id'] = absint( $row['wordpress_post_id'] ?? 0 );
+		$row['featured_image_attachment_id'] = absint( $row['featured_image_attachment_id'] ?? 0 );
+		$row['featured_image_status'] = AICS_Featured_Image_State::normalize( $row['featured_image_status'] ?? '' );
 		$row['source_type'] = in_array( $row['source_type'] ?? '', self::SOURCES, true ) ? $row['source_type'] : 'automation';
 		$row['status'] = in_array( $row['status'] ?? '', self::STATUSES, true ) ? $row['status'] : 'needs_attention';
-		foreach ( array( 'planned_publish_at', 'last_generation_at', 'generated_at', 'approved_at', 'rejected_at', 'post_created_at', 'scheduled_at', 'published_at', 'created_at', 'updated_at' ) as $field ) { $row[ $field ] = self::datetime( $row[ $field ] ?? null ); }
+		foreach ( array( 'planned_publish_at', 'last_generation_at', 'generated_at', 'approved_at', 'rejected_at', 'post_created_at', 'scheduled_at', 'published_at', 'featured_image_generated_at', 'featured_image_uploaded_at', 'featured_image_attached_at', 'created_at', 'updated_at' ) as $field ) { $row[ $field ] = self::datetime( $row[ $field ] ?? null ); }
 		return $row;
 	}
 
 	private function table(): string { global $wpdb; return $wpdb->prefix . 'aics_articles'; }
-	private function formats( array $row ): array { $ints = array( 'idea_id', 'profile_id', 'run_id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by' ); return array_map( static fn( $field ) => in_array( $field, $ints, true ) ? '%d' : '%s', array_keys( $row ) ); }
+	private function formats( array $row ): array { $ints = array( 'idea_id', 'profile_id', 'run_id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by', 'featured_image_required', 'featured_image_attachment_id', 'featured_image_attempts' ); return array_map( static fn( $field ) => in_array( $field, $ints, true ) ? '%d' : '%s', array_keys( $row ) ); }
 	private static function result( bool $success, int $id, string $uuid, string $code ): array { return array( 'success' => $success, 'article_id' => $id, 'uuid' => $uuid, 'code' => $code ); }
 	private static function simple( bool $success, int $id, string $code ): array { return array( 'success' => $success, 'article_id' => $id, 'code' => $code ); }
 	private static function now(): string { return current_time( 'mysql', true ); }
@@ -402,5 +450,6 @@ final class AICS_Article_Repository {
 	private static function normalize_hash_part( string $value ): string { return trim( preg_replace( '/\s+/u', ' ', $value ) ?? '' ); }
 	private static function length( string $value ): int { return function_exists( 'mb_strlen' ) ? mb_strlen( $value, 'UTF-8' ) : strlen( $value ); }
 	private static function cut( string $value, int $maximum ): string { return function_exists( 'mb_substr' ) ? mb_substr( $value, 0, $maximum, 'UTF-8' ) : substr( $value, 0, $maximum ); }
+	private static function nullable_text($value,int $maximum){if(null===$value||''===$value){return null;}if(!is_scalar($value)){return false;}return self::cut(sanitize_textarea_field((string)$value),$maximum);}
 	private static function datetime( $value ): ?string { if ( null === $value || '' === $value ) { return null; } if ( ! is_scalar( $value ) ) { return null; } $value = (string) $value; $date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, new DateTimeZone( 'UTC' ) ); $errors = DateTimeImmutable::getLastErrors(); return false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( 'Y-m-d H:i:s' ) === $value ? $value : null; }
 }

@@ -179,6 +179,8 @@ final class AICS_Automation_Profile_Repository {
 		$table = $this->table();
 		return $table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
 	}
+	public function get_overdue_profiles_for_health_check($utc_cutoff,$limit=100):array{global $wpdb;$cutoff=self::datetime($utc_cutoff);if(!$cutoff){return array();}$limit=max(1,min(100,absint($limit)));$sql=$wpdb->prepare("SELECT id,profile_name,status,next_run_at FROM {$this->table()} WHERE status='active' AND next_run_at IS NOT NULL AND next_run_at<=%s ORDER BY next_run_at ASC,id ASC LIMIT %d",$cutoff,$limit+1);return $wpdb->get_results($sql,ARRAY_A)?:array();}
+	public function count_active_profiles():int{global $wpdb;return (int)$wpdb->get_var("SELECT COUNT(*) FROM {$this->table()} WHERE status='active'");}
 
 	private function table(): string { global $wpdb; return $wpdb->prefix . 'aics_automation_profiles'; }
 	private static function result( bool $success, int $id, string $code ): array { return array( 'success' => $success, 'profile_id' => $id, 'code' => $code ); }

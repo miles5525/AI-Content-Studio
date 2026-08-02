@@ -1,0 +1,24 @@
+<?php
+/** Presentation-neutral automation health rules. @package AIContentStudio */
+if(!defined('ABSPATH')){exit;}
+final class AICS_Automation_Stale_Run_Detector{
+	public const RUNNING_SECONDS=600,QUEUED_SECONDS=1800,RETRY_SECONDS=900,PROFILE_SECONDS=1800,SNAPSHOT_SECONDS=7200;
+	private const EXECUTABLE=array('pending','generate_ideas','evaluate_ideas','queue_idea','generate_article','create_post','schedule_post','publish_post','finalize');
+	public function thresholds():array{return array('running'=>max(60,(int)apply_filters('aics_health_running_stale_seconds',self::RUNNING_SECONDS)),'queued'=>max(60,(int)apply_filters('aics_health_queued_stale_seconds',self::QUEUED_SECONDS)),'retry'=>max(60,(int)apply_filters('aics_health_retry_overdue_seconds',self::RETRY_SECONDS)),'profile'=>max(60,(int)apply_filters('aics_health_profile_overdue_seconds',self::PROFILE_SECONDS)),'snapshot'=>max(300,(int)apply_filters('aics_health_snapshot_stale_seconds',self::SNAPSHOT_SECONDS)));}
+	public function detect(array $runs,array $profiles,array $multiple,array $articles,string $now):array{$findings=array();$t=$this->thresholds();$now_ts=strtotime($now.' UTC');foreach($runs as $run){$id=absint($run['id']);$profile=absint($run['profile_id']);$status=sanitize_key($run['status']??'');$step=sanitize_key($run['current_step']??'');$updated=strtotime((string)($run['updated_at']??'').' UTC');$has=!empty($run['has_lock_token']);$expiry=strtotime((string)($run['lock_expires_at']??'').' UTC');$valid=$has&&$expiry&&$expiry>$now_ts;
+		if('running'===$status&&!$valid&&$updated&&$updated<=($now_ts-$t['running'])){$findings[]=$this->finding($has?'stale_running_expired_lock':'running_without_lock','critical','run',$id,$id,$profile,'resume_run',$now);}
+		if('queued'===$status&&in_array($step,self::EXECUTABLE,true)&&empty($run['next_retry_at'])&&!$valid&&$updated&&$updated<=($now_ts-$t['queued'])){$findings[]=$this->finding('queued_not_advancing','warning','run',$id,$id,$profile,'view_run',$now);}
+		if('retrying'===$status&&!$valid){if(empty($run['next_retry_at'])){$findings[]=$this->finding('retry_without_retry_time','warning','run',$id,$id,$profile,'retry_run',$now);}elseif(strtotime($run['next_retry_at'].' UTC')<=($now_ts-$t['retry'])){$findings[]=$this->finding('retry_overdue','warning','run',$id,$id,$profile,'retry_run',$now);}}
+		if(in_array($status,array('completed','cancelled'),true)&&null!==($run['active_profile_key']??null)){$findings[]=$this->finding('terminal_run_holds_profile_reservation','critical','run',$id,$id,$profile,'manual_review',$now);}
+		if('failed'===$status&&null!==($run['active_profile_key']??null)){$findings[]=$this->finding('failed_run_holds_profile_reservation','critical','run',$id,$id,$profile,'manual_review',$now);}
+		if(null!==($run['active_profile_key']??null)&&absint($run['active_profile_key'])!==$profile){$findings[]=$this->finding('reservation_profile_mismatch','critical','run',$id,$id,$profile,'manual_review',$now);}
+		if(in_array($status,array('queued','running','retrying'),true)&&!in_array($step,array_merge(self::EXECUTABLE,array('waiting_idea_approval','waiting_article_approval','waiting_publish_approval')),true)){$findings[]=$this->finding('active_run_unknown_step','critical','run',$id,$id,$profile,'manual_review',$now);}
+		if('completed'===$status&&('complete'!==$step||empty($run['completed_at']))){$findings[]=$this->finding('completed_run_not_finalized','warning','run',$id,$id,$profile,'view_run',$now);}
+	}
+	foreach($multiple as $row){$p=absint($row['profile_id']);$findings[]=$this->finding('multiple_active_runs_for_profile','critical','profile',$p,0,$p,'manual_review',$now);}
+	foreach($profiles as $profile){$p=absint($profile['id']);$findings[]=$this->finding('overdue_profile_without_run','warning','profile',$p,0,$p,'review_profile',$now);}
+	$delivery=new AICS_Automation_Delivery_Service();foreach($articles as $article){$run=absint($article['run_id']);$profile=absint($article['profile_id']);if(!get_post(absint($article['wordpress_post_id']))){$findings[]=$this->finding('missing_expected_post','critical','run',$run,$run,$profile,'view_run',$now);continue;}$owned=$delivery->validate_article_post_ownership($article);if(empty($owned['success'])){$findings[]=$this->finding('ownership_conflict','critical','run',$run,$run,$profile,'manual_review',$now);}}
+	return $this->unique($findings);}
+	private function finding(string $code,string $severity,string $type,int $entity,int $run,int $profile,string $action,string $now):array{return array('code'=>$code,'severity'=>$severity,'entity_type'=>$type,'entity_id'=>$entity,'run_id'=>$run,'profile_id'=>$profile,'recommended_action'=>$action,'detected_at'=>$now);}
+	private function unique(array $items):array{$out=array();foreach($items as $item){$key=$item['code'].'|'.$item['entity_type'].'|'.$item['entity_id'];$out[$key]=$item;}return array_values($out);}
+}

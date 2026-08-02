@@ -122,6 +122,9 @@
 .aics-run-details dd { margin: 5px 0 0; overflow-wrap: anywhere; }
 .aics-runs-page .aics-card { margin-top: 18px; }
 .aics-runs-page .aics-table-wrap { overflow-x: auto; }
+.aics-health-table { min-width: 820px; }
+.aics-run-health .aics-health-finding { margin-top: 12px; padding: 12px 14px; border-left: 4px solid #dba617; background: var(--aics-surface-muted); }
+.aics-run-health .aics-health-finding:first-of-type { margin-top: 0; }
 .aics-dashboard-card { position: relative; min-height: 118px; padding: 18px 20px; overflow: hidden; border: 1px solid var(--aics-border); border-radius: var(--aics-radius-medium); background: var(--aics-surface); box-shadow: var(--aics-shadow-small); }
 .aics-dashboard-card::before { position: absolute; top: 0; right: 0; bottom: 0; width: 4px; background: var(--aics-primary); content: ""; }
 .aics-dashboard-card--success::before { background: #00a32a; }

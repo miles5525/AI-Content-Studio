@@ -15,6 +15,26 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Stores installation metadata and will own future schema upgrades.
  */
 final class Installer {
+	private const FEATURED_IMAGE_COLUMNS = array(
+		'featured_image_required',
+		'featured_image_status',
+		'featured_image_attachment_id',
+		'featured_image_prompt',
+		'featured_image_alt_text',
+		'featured_image_provider',
+		'featured_image_model',
+		'featured_image_attempts',
+		'featured_image_generated_at',
+		'featured_image_uploaded_at',
+		'featured_image_attached_at',
+		'featured_image_last_error_code',
+	);
+
+	private const FEATURED_IMAGE_INDEXES = array(
+		'featured_image_status'        => 'featured_image_status',
+		'featured_image_attachment_id' => 'featured_image_attachment_id',
+	);
+
 	/**
 	 * Saves installation metadata and installs the current schema.
 	 *
@@ -31,7 +51,7 @@ final class Installer {
 	}
 
 	/**
-	 * Applies schema changes only when the installed version is behind.
+	 * Applies version upgrades and verifies the featured-image repair before completion.
 	 */
 	public static function maybe_upgrade(): void {
 		if ( AICS_VERSION !== (string) get_option( 'aics_version', '' ) ) {
@@ -207,6 +227,18 @@ final class Installer {
 			scheduled_at datetime NULL,
 			published_at datetime NULL,
 			last_error_code varchar(100) NOT NULL DEFAULT '',
+			featured_image_required tinyint(1) unsigned NOT NULL DEFAULT 0,
+			featured_image_status varchar(32) NOT NULL DEFAULT 'not_requested',
+			featured_image_attachment_id bigint(20) unsigned NULL,
+			featured_image_prompt text NULL,
+			featured_image_alt_text text NULL,
+			featured_image_provider varchar(64) NULL,
+			featured_image_model varchar(100) NULL,
+			featured_image_attempts int(10) unsigned NOT NULL DEFAULT 0,
+			featured_image_generated_at datetime NULL,
+			featured_image_uploaded_at datetime NULL,
+			featured_image_attached_at datetime NULL,
+			featured_image_last_error_code varchar(100) NULL,
 			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			updated_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_at datetime NOT NULL,
@@ -222,6 +254,8 @@ final class Installer {
 			KEY planned_publish_at (planned_publish_at),
 			KEY generated_at (generated_at),
 			KEY approved_by (approved_by),
+			KEY featured_image_status (featured_image_status),
+			KEY featured_image_attachment_id (featured_image_attachment_id),
 			KEY created_at (created_at),
 			KEY updated_at (updated_at)
 		) {$charset_collate};";
@@ -270,11 +304,39 @@ final class Installer {
 		$snapshot_exists = $runs_exists && null !== $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$runs_table} LIKE %s", 'configuration_snapshot' ) );
 		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
 		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
+		$featured_schema_exists = $articles_exists && self::featured_image_schema_complete();
 		$actions_exists  = $actions_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $actions_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $actions_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $featured_schema_exists && $actions_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
+	}
+
+	/**
+	 * Confirms that every Task 1.1 column and index exists on the articles table.
+	 */
+	private static function featured_image_schema_complete(): bool {
+		global $wpdb;
+		$articles_table = $wpdb->prefix . 'aics_articles';
+
+		if ( $articles_table !== $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) ) ) {
+			return false;
+		}
+
+		foreach ( self::FEATURED_IMAGE_COLUMNS as $column ) {
+			if ( null === $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$articles_table} LIKE %s", $column ) ) ) {
+				return false;
+			}
+		}
+
+		foreach ( self::FEATURED_IMAGE_INDEXES as $index_name => $column_name ) {
+			$index_rows = $wpdb->get_results( $wpdb->prepare( "SHOW INDEX FROM {$articles_table} WHERE Key_name = %s", $index_name ), ARRAY_A );
+			if ( 1 !== count( $index_rows ) || $column_name !== ( $index_rows[0]['Column_name'] ?? '' ) || 1 !== (int) ( $index_rows[0]['Seq_in_index'] ?? 0 ) ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**

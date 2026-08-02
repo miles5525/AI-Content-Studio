@@ -19,6 +19,7 @@ final class AICS_Dashboard_Page {
 		$summary    = $repository->get_summary();
 		$summary['drafts_created'] = self::count_generated_wordpress_drafts();
 		$runs_attention = ( new AICS_Automation_Run_Repository() )->count_runs( array( 'needs_attention'=>true ) );
+		$health = ( new AICS_Automation_Health_Monitor() )->get_snapshot( false );
 		$activity   = $repository->get_recent( 10 );
 		$cards      = array(
 			'total_ai_requests'      => __( 'Total AI Requests', 'ai-content-studio' ),
@@ -39,6 +40,7 @@ final class AICS_Dashboard_Page {
 				<?php endforeach; ?>
 			</div>
 			<section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e( 'Runs Needing Attention', 'ai-content-studio' ); ?></h2></div><div class="aics-card-body"><p><strong><?php echo esc_html( number_format_i18n( $runs_attention ) ); ?></strong></p><a class="button" href="<?php echo esc_url( add_query_arg( array( 'page'=>'aics-automation-runs', 'run_view'=>'needs_attention' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Review Runs Needing Attention', 'ai-content-studio' ); ?></a></div></section>
+			<section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e( 'Automation Health', 'ai-content-studio' ); ?></h2></div><div class="aics-card-body"><dl class="aics-run-details"><div><dt><?php esc_html_e('Overall Status','ai-content-studio');?></dt><dd><?php echo esc_html(ucfirst($health['overall_status']??'unknown'));?></dd></div><div><dt><?php esc_html_e('Critical Issues','ai-content-studio');?></dt><dd><?php echo esc_html(number_format_i18n(absint($health['critical_issue_count']??0)));?></dd></div><div><dt><?php esc_html_e('Warnings','ai-content-studio');?></dt><dd><?php echo esc_html(number_format_i18n(absint($health['warning_issue_count']??0)));?></dd></div><div><dt><?php esc_html_e('Last Checked','ai-content-studio');?></dt><dd><?php echo esc_html(!empty($health['checked_at'])?get_date_from_gmt($health['checked_at'],get_option('date_format').' '.get_option('time_format')):__('Never','ai-content-studio'));?></dd></div></dl><p><a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>'aics-automation-runs','run_view'=>'health'),admin_url('admin.php')));?>"><?php esc_html_e('Review Automation Health','ai-content-studio');?></a></p></div></section>
 
 			<h2><?php esc_html_e( 'Recent Activity', 'ai-content-studio' ); ?></h2>
 			<?php if ( empty( $activity ) ) : ?>
