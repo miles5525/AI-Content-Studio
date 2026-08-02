@@ -820,6 +820,26 @@ Current limitations: `posts_per_period` does not yet distribute multiple same-da
 
 ## Important Instruction for Codex
 
+## Milestone 2 Task 1 — Read-only Automation Runs
+
+Milestone 1 Core End-to-End Automation MVP was accepted on 2026-08-02. Milestone 2 — Operational Visibility, Recovery Controls, and Private Beta Hardening has started, and Task 1 is complete.
+
+The protected `aics-automation-runs` submenu appears between Automations and Approvals. `AICS_Automation_Runs_Page` owns capability enforcement, strict GET allowlists, server-rendered tabs and filters, 20-row bounded pagination, escaped list/detail presentation, WordPress edit-link permission checks, and accessible empty states. It provides All Runs and Needs Attention views without executing cron or modifying records.
+
+`AICS_Automation_Run_Inspector` loads runs, current profile names, centralized effective configuration, bounded idea/article collections, post associations, safe aggregate counts, attention reasons, and controlled status/step/error labels. List content totals use batch aggregate repository queries rather than per-row count queries. Needs Attention counts distinct non-completed, non-cancelled runs that are retrying/failed, have a controlled run error, have failed/needs-attention articles, or store an association to a missing WordPress post. Intentional cancelled runs remain available only in All Runs by default.
+
+Filters accept only allowlisted run statuses, workflow steps, trigger types, current numeric profile IDs, and fixed 7/30/90-day UTC boundaries. Browser-supplied ordering and SQL fragments are not accepted. Details accept only an absolute numeric run ID and display actual lifecycle timestamps without fabricating step history.
+
+Run details show a bounded configuration summary: workflow mode, cycle counts, article length, approval booleans, publishing mode, frequency/time, and valid author/category names. Complete snapshots, business context, credentials, prompts, and provider responses are never rendered. Snapshot runs are labeled Saved Run Configuration; legacy runs show Legacy Profile Fallback with a historical-accuracy notice.
+
+Idea summaries exclude outlines, fingerprints, emails, and action controls. Article summaries exclude bodies and show status, word count, generation attempts, planned time, controlled errors, and post association state. Existing posts show status and capability-checked WordPress edit links; missing stored post IDs are clearly flagged.
+
+The Dashboard now shows Runs Needing Attention with a link to the filtered view. Automations links to All Runs and Needs Attention and uses the same distinct attention definition. This task is strictly read-only: retry, resume, cancel, delete, repair, rerun, dispatcher, and worker controls are not implemented.
+
+Files created: `includes/admin/class-automation-runs-page.php` and `includes/services/class-automation-run-inspector.php`. Files modified: `ai-content-studio.php`, `includes/admin/class-admin-menu.php`, `includes/admin/class-assets.php`, `includes/admin/class-dashboard-page.php`, `includes/admin/class-automations-page.php`, `includes/database/class-automation-run-repository.php`, `includes/database/class-content-idea-repository.php`, `includes/database/class-article-repository.php`, `assets/css/admin.css`, and `AI_CONTEXT.md`. No schema change was required; version remains `0.8.0`.
+
+Current limitations: the database does not store per-step event history; current profile names may be unavailable; lists are deliberately bounded to 100 related ideas/articles in details; there are no operational mutation controls or notifications. Next planned task: **Milestone 2 Task 2 — Safe Retry, Resume, and Cancel Controls**. It has not begun.
+
 ## Milestone 1 Blocker Repair Task 2 — Article Safety Validation Diagnostics and Retry Recovery
 
 The confirmed failure path was `AICS_AI_Engine::generate_automation_article()` → `AICS_Post_Generator::validate_and_prepare_article()`. The old validator returned only `unsafe_article_content` for both active markup and several incomplete-content patterns. It also treated raw-pattern matching as a broad decision boundary. After that response, the worker scheduled a retry without returning the empty persistent article from `generating`, leaving article 16 and idea 53 in their in-progress states.

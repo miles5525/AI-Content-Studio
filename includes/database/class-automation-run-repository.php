@@ -44,17 +44,31 @@ final class AICS_Automation_Run_Repository {
 
 	/** Returns a bounded controlled run list without lock tokens. */
 	public function get_runs(array $args=array()):array{
-		global $wpdb;$where=array('1=1');$values=array();
+		global $wpdb;$where=array('1=1');$values=array();$runs_table=$this->table();
 		if(isset($args['profile_id'])){$where[]='profile_id=%d';$values[]=absint($args['profile_id']);}
 		if(isset($args['status'])&&in_array($args['status'],self::STATUSES,true)){$where[]='status=%s';$values[]=$args['status'];}
 		if(isset($args['current_step'])&&in_array($args['current_step'],self::STEPS,true)){$where[]='current_step=%s';$values[]=$args['current_step'];}
 		if(isset($args['trigger_type'])&&in_array($args['trigger_type'],self::TRIGGERS,true)){$where[]='trigger_type=%s';$values[]=$args['trigger_type'];}
+		if(isset($args['created_after'])){$date=self::datetime($args['created_after']);$where[]=null===$date?'1=0':'created_at>=%s';if(null!==$date){$values[]=$date;}}
+		if(!empty($args['needs_attention'])){$articles=$wpdb->prefix.'aics_articles';$ideas=$wpdb->prefix.'aics_content_ideas';$where[]="status<>'cancelled' AND status<>'completed' AND (status IN ('retrying','failed') OR last_error_code<>'' OR EXISTS (SELECT 1 FROM {$ideas} i WHERE i.run_id={$runs_table}.id AND i.status='failed') OR EXISTS (SELECT 1 FROM {$articles} a WHERE a.run_id={$runs_table}.id AND (a.status IN ('needs_attention','failed') OR (a.wordpress_post_id IS NOT NULL AND a.wordpress_post_id>0 AND NOT EXISTS (SELECT 1 FROM {$wpdb->posts} p WHERE p.ID=a.wordpress_post_id)))))";}
 		$order='ASC'===strtoupper((string)($args['order']??'DESC'))?'ASC':'DESC';$allowed=array('id','status','created_at','updated_at','next_retry_at');$orderby=in_array($args['orderby']??'',$allowed,true)?$args['orderby']:'id';$limit=max(1,min(100,absint($args['limit']??20)));$offset=absint($args['offset']??0);$values[]=$limit;$values[]=$offset;
-		$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE ".implode(' AND ',$where)." ORDER BY {$orderby} {$order} LIMIT %d OFFSET %d",$values);return array_values(array_filter(array_map(array($this,'normalize'),$wpdb->get_results($sql,ARRAY_A))));
+		$order_sql=!empty($args['needs_attention'])?"CASE status WHEN 'failed' THEN 0 WHEN 'retrying' THEN 1 ELSE 2 END ASC,updated_at DESC":"{$orderby} {$order}";
+		$sql=$wpdb->prepare("SELECT ".self::COLUMNS." FROM {$this->table()} WHERE ".implode(' AND ',$where)." ORDER BY {$order_sql} LIMIT %d OFFSET %d",$values);return array_values(array_filter(array_map(array($this,'normalize'),$wpdb->get_results($sql,ARRAY_A))));
 	}
 
 	/** Counts runs through strictly controlled filters. */
-	public function count_runs(array $args=array()):int{global $wpdb;$where=array('1=1');$values=array();if(isset($args['profile_id'])){$id=absint($args['profile_id']);$where[]=$id>0?'profile_id=%d':'1=0';if($id>0){$values[]=$id;}}if(isset($args['status'])){if(in_array($args['status'],self::STATUSES,true)){$where[]='status=%s';$values[]=$args['status'];}else{$where[]='1=0';}}if(isset($args['current_step'])){if(in_array($args['current_step'],self::STEPS,true)){$where[]='current_step=%s';$values[]=$args['current_step'];}else{$where[]='1=0';}}$sql="SELECT COUNT(*) FROM {$this->table()} WHERE ".implode(' AND ',$where);return (int)$wpdb->get_var($values?$wpdb->prepare($sql,$values):$sql);}
+	public function count_runs(array $args=array()):int{
+		global $wpdb;$where=array('1=1');$values=array();$runs_table=$this->table();
+		if(isset($args['profile_id'])){$id=absint($args['profile_id']);$where[]=$id>0?'profile_id=%d':'1=0';if($id>0){$values[]=$id;}}
+		if(isset($args['status'])){if(in_array($args['status'],self::STATUSES,true)){$where[]='status=%s';$values[]=$args['status'];}else{$where[]='1=0';}}
+		if(isset($args['current_step'])){if(in_array($args['current_step'],self::STEPS,true)){$where[]='current_step=%s';$values[]=$args['current_step'];}else{$where[]='1=0';}}
+		if(isset($args['trigger_type'])){if(in_array($args['trigger_type'],self::TRIGGERS,true)){$where[]='trigger_type=%s';$values[]=$args['trigger_type'];}else{$where[]='1=0';}}
+		if(isset($args['created_after'])){$date=self::datetime($args['created_after']);$where[]=null===$date?'1=0':'created_at>=%s';if(null!==$date){$values[]=$date;}}
+		if(!empty($args['needs_attention'])){$articles=$wpdb->prefix.'aics_articles';$ideas=$wpdb->prefix.'aics_content_ideas';$where[]="status<>'cancelled' AND status<>'completed' AND (status IN ('retrying','failed') OR last_error_code<>'' OR EXISTS (SELECT 1 FROM {$ideas} i WHERE i.run_id={$runs_table}.id AND i.status='failed') OR EXISTS (SELECT 1 FROM {$articles} a WHERE a.run_id={$runs_table}.id AND (a.status IN ('needs_attention','failed') OR (a.wordpress_post_id IS NOT NULL AND a.wordpress_post_id>0 AND NOT EXISTS (SELECT 1 FROM {$wpdb->posts} p WHERE p.ID=a.wordpress_post_id)))))";}
+		$sql="SELECT COUNT(*) FROM {$runs_table} WHERE ".implode(' AND ',$where);return (int)$wpdb->get_var($values?$wpdb->prepare($sql,$values):$sql);
+	}
+
+	public function get_operational_counts():array{global $wpdb;$table=$this->table();$row=$wpdb->get_row("SELECT SUM(status IN ('queued','running','retrying')) active_runs,SUM(status='retrying') retrying_runs,SUM(status='failed') failed_runs,SUM(status='completed') completed_runs FROM {$table}",ARRAY_A);return array('active'=>absint($row['active_runs']??0),'retrying'=>absint($row['retrying_runs']??0),'failed'=>absint($row['failed_runs']??0),'completed'=>absint($row['completed_runs']??0),'needs_attention'=>$this->count_runs(array('needs_attention'=>true)));}
 
 	/** Atomically claims a queued or ready retry run and increments attempts once. */
 	public function claim_run($run_id,$lock_ttl=300):array{

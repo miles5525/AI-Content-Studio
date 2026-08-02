@@ -47,6 +47,7 @@ require_once AICS_PLUGIN_DIR . 'includes/services/class-article-content-validato
 require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-post-creator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-delivery-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-run-inspector.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-worker.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-scheduler.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-system-check.php';
@@ -65,6 +66,7 @@ require_once AICS_PLUGIN_DIR . 'includes/admin/class-settings-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-content-studio-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-content-history-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-automations-page.php';
+require_once AICS_PLUGIN_DIR . 'includes/admin/class-automation-runs-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-approvals-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-dashboard-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-system-status-page.php';

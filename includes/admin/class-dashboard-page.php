@@ -18,6 +18,7 @@ final class AICS_Dashboard_Page {
 		$repository = new AICS_Usage_Log_Repository();
 		$summary    = $repository->get_summary();
 		$summary['drafts_created'] = self::count_generated_wordpress_drafts();
+		$runs_attention = ( new AICS_Automation_Run_Repository() )->count_runs( array( 'needs_attention'=>true ) );
 		$activity   = $repository->get_recent( 10 );
 		$cards      = array(
 			'total_ai_requests'      => __( 'Total AI Requests', 'ai-content-studio' ),
@@ -37,6 +38,7 @@ final class AICS_Dashboard_Page {
 					<div class="aics-dashboard-card aics-dashboard-card--<?php echo esc_attr( 'successful_ai_requests' === $key ? 'success' : ( 'failed_ai_requests' === $key ? 'failed' : 'neutral' ) ); ?>"><span><?php echo esc_html( $label ); ?></span><strong><?php echo esc_html( number_format_i18n( $summary[ $key ] ) ); ?></strong></div>
 				<?php endforeach; ?>
 			</div>
+			<section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e( 'Runs Needing Attention', 'ai-content-studio' ); ?></h2></div><div class="aics-card-body"><p><strong><?php echo esc_html( number_format_i18n( $runs_attention ) ); ?></strong></p><a class="button" href="<?php echo esc_url( add_query_arg( array( 'page'=>'aics-automation-runs', 'run_view'=>'needs_attention' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Review Runs Needing Attention', 'ai-content-studio' ); ?></a></div></section>
 
 			<h2><?php esc_html_e( 'Recent Activity', 'ai-content-studio' ); ?></h2>
 			<?php if ( empty( $activity ) ) : ?>

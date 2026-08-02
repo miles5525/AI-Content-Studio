@@ -25,6 +25,7 @@ final class AICS_Automations_Page {
 		<div class="wrap aics-admin-wrap aics-automations-page">
 			<header class="aics-page-header"><h1 class="aics-page-title"><?php esc_html_e( 'Automations', 'ai-content-studio' ); ?></h1><p class="aics-page-description"><?php esc_html_e( 'Configure the persistent Autopilot or Approval Workflow profile. Approved automated articles are delivered as WordPress drafts; scheduling and publishing remain separate workflow steps.', 'ai-content-studio' ); ?></p></header>
 			<p class="aics-automation-info"><?php esc_html_e( 'Changes apply to new automation cycles. An existing cycle continues with the settings saved when it started.', 'ai-content-studio' ); ?></p>
+			<p class="aics-actions"><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-automation-runs' ) ); ?>"><?php esc_html_e( 'View Automation Runs', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( add_query_arg( array( 'page'=>'aics-automation-runs', 'run_view'=>'needs_attention' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Review Runs Needing Attention', 'ai-content-studio' ); ?></a></p>
 			<?php self::render_notice(); self::render_errors( $errors ); self::render_summary( $stored ); self::render_schedule_preview( $stored ); ?>
 			<form class="aics-automation-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
@@ -55,7 +56,7 @@ final class AICS_Automations_Page {
 
 	private static function render_summary( array $profile ): void {
 		$exists=$profile['id']>0; $active='active'===$profile['status']; $modes=array('autopilot'=>__('Autopilot','ai-content-studio'),'approval'=>__('Approval Workflow','ai-content-studio'),'manual'=>__('Manual','ai-content-studio'));
-		$run_repo=new AICS_Automation_Run_Repository();$pending_ideas=(new AICS_Content_Idea_Repository())->count_ideas(array('status'=>'pending_approval'));$pending_articles=(new AICS_Article_Repository())->count_articles(array('status'=>'pending_approval'));$publishing_approvals=$run_repo->count_runs(array('status'=>'queued','current_step'=>'waiting_publish_approval'));$runs_attention=$run_repo->count_runs(array('status'=>'failed'));
+		$run_repo=new AICS_Automation_Run_Repository();$pending_ideas=(new AICS_Content_Idea_Repository())->count_ideas(array('status'=>'pending_approval'));$pending_articles=(new AICS_Article_Repository())->count_articles(array('status'=>'pending_approval'));$publishing_approvals=$run_repo->count_runs(array('status'=>'queued','current_step'=>'waiting_publish_approval'));$runs_attention=$run_repo->count_runs(array('needs_attention'=>true));
 		?>
 		<section class="aics-card aics-automation-summary" aria-labelledby="aics-automation-summary-heading"><div class="aics-card-header"><h2 id="aics-automation-summary-heading"><?php esc_html_e('Automation Status','ai-content-studio');?></h2></div><div class="aics-card-body"><div class="aics-automation-summary-grid">
 			<div><span><?php esc_html_e('Configuration','ai-content-studio');?></span><strong><?php echo esc_html($exists?__('Saved','ai-content-studio'):__('Not saved yet','ai-content-studio'));?></strong></div>

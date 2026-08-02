@@ -135,6 +135,7 @@ final class AICS_Article_Repository {
 		$args['run_id'] = $id;
 		return $this->get_articles( $args );
 	}
+	public function aggregate_for_run_ids(array $run_ids):array{global $wpdb;$ids=array_values(array_unique(array_filter(array_map('absint',$run_ids))));if(!$ids){return array();}$marks=implode(',',array_fill(0,count($ids),'%d'));$sql=$wpdb->prepare("SELECT run_id,COUNT(*) articles,SUM(wordpress_post_id IS NOT NULL AND wordpress_post_id>0) posts FROM {$this->table()} WHERE run_id IN ({$marks}) GROUP BY run_id",$ids);$out=array();foreach($wpdb->get_results($sql,ARRAY_A) as $row){$out[absint($row['run_id'])]=array('articles'=>absint($row['articles']),'posts'=>absint($row['posts']));}return $out;}
 
 	/** Counts downstream articles with a native post association for one run/profile. */
 	public function count_associated_posts_for_run( $run_id, $profile_id ): int {
