@@ -39,14 +39,15 @@ final class AICS_HTTP_Client {
 			array(
 				'headers'            => $headers,
 				'body'               => $encoded_body,
-				'timeout'            => max( 5, min( 30, $timeout ) ),
+				'timeout'            => max( 5, min( 180, $timeout ) ),
 				'data_format'        => 'body',
 				'reject_unsafe_urls' => true,
 			)
 		);
 
 		if ( is_wp_error( $response ) ) {
-			return $this->failure( 0, null, 'network_error', __( 'The remote service could not be reached.', 'ai-content-studio' ) );
+			$timed_out = false !== stripos( $response->get_error_message(), 'timed out' ) || false !== stripos( $response->get_error_message(), 'timeout' );
+			return $this->failure( 0, null, $timed_out ? 'timeout' : 'network_error', $timed_out ? __( 'The remote request timed out.', 'ai-content-studio' ) : __( 'The remote service could not be reached.', 'ai-content-studio' ) );
 		}
 
 		$status_code = (int) wp_remote_retrieve_response_code( $response );

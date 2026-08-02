@@ -18,6 +18,8 @@ final class AICS_Settings_Page {
 	private const REMOVE_ACTION = 'aics_remove_api_key';
 	private const TEST_ACTION = 'aics_test_openai_connection';
 	private const SAVE_IMAGE_ACTION = 'aics_save_featured_image_settings';
+	private const TEST_IMAGE_ACTION = 'aics_test_image_generation';
+	private const IMAGE_TEST_TRANSIENT_PREFIX = 'aics_image_test_result_';
 
 	/**
 	 * Registers settings write handlers.
@@ -29,6 +31,7 @@ final class AICS_Settings_Page {
 		add_action( 'admin_post_' . self::REMOVE_ACTION, array( self::class, 'handle_remove_api_key' ) );
 		add_action( 'admin_post_' . self::TEST_ACTION, array( self::class, 'handle_test_connection' ) );
 		add_action( 'admin_post_' . self::SAVE_IMAGE_ACTION, array( self::class, 'handle_save_featured_images' ) );
+		add_action( 'admin_post_' . self::TEST_IMAGE_ACTION, array( self::class, 'handle_test_image_generation' ) );
 	}
 
 	/**
@@ -119,9 +122,21 @@ final class AICS_Settings_Page {
 						<tr><th scope="row"><label for="aics-image-aspect-ratio"><?php esc_html_e( 'Default aspect ratio', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-aspect-ratio" name="image_aspect_ratio"><?php foreach ( array( 'landscape' => __( 'Landscape', 'ai-content-studio' ), 'square' => __( 'Square', 'ai-content-studio' ), 'portrait' => __( 'Portrait', 'ai-content-studio' ) ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['aspect_ratio'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
 						<tr><th scope="row"><label for="aics-image-quality"><?php esc_html_e( 'Default quality', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-quality" name="image_quality"><?php foreach ( array( 'standard' => __( 'Standard', 'ai-content-studio' ), 'high' => __( 'High', 'ai-content-studio' ) ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['quality'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
 						<tr><th scope="row"><label for="aics-image-output-format"><?php esc_html_e( 'Default output format', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-output-format" name="image_output_format"><?php foreach ( array( 'png' => 'PNG', 'jpeg' => 'JPEG', 'webp' => 'WebP' ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['output_format'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
+						<tr><th scope="row"><label for="aics-image-visual-style"><?php esc_html_e( 'Default visual style', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-visual-style" name="image_visual_style"><?php foreach ( self::visual_style_labels() as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['visual_style'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
 					</table>
 					<?php submit_button( __( 'Save Featured Image Settings', 'ai-content-studio' ) ); ?>
 				</form>
+				<div class="aics-connection-actions">
+					<h3><?php esc_html_e( 'Test Image Generation', 'ai-content-studio' ); ?></h3>
+					<p><?php esc_html_e( 'This sends one image-generation request using your saved image settings. The result is validated and immediately deleted. It is not added to the Media Library.', 'ai-content-studio' ); ?></p>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_IMAGE_ACTION ); ?>">
+						<?php wp_nonce_field( self::TEST_IMAGE_ACTION, 'aics_test_image_nonce' ); ?>
+						<label for="aics-image-test-topic"><strong><?php esc_html_e( 'Test topic', 'ai-content-studio' ); ?></strong></label><br>
+						<input id="aics-image-test-topic" class="regular-text" type="text" name="image_test_topic" maxlength="250" value="<?php echo esc_attr__( 'Modern content strategy for small businesses', 'ai-content-studio' ); ?>">
+						<?php submit_button( __( 'Generate and Validate Test Image', 'ai-content-studio' ), 'secondary' ); ?>
+					</form>
+				</div>
 			</div>
 		</div>
 		<?php
@@ -172,8 +187,33 @@ final class AICS_Settings_Page {
 			'aspect_ratio' => isset( $_POST['image_aspect_ratio'] ) && is_string( $_POST['image_aspect_ratio'] ) ? wp_unslash( $_POST['image_aspect_ratio'] ) : '',
 			'quality' => isset( $_POST['image_quality'] ) && is_string( $_POST['image_quality'] ) ? wp_unslash( $_POST['image_quality'] ) : '',
 			'output_format' => isset( $_POST['image_output_format'] ) && is_string( $_POST['image_output_format'] ) ? wp_unslash( $_POST['image_output_format'] ) : '',
+			'visual_style' => isset( $_POST['image_visual_style'] ) && is_string( $_POST['image_visual_style'] ) ? wp_unslash( $_POST['image_visual_style'] ) : '',
 		) );
 		self::redirect( is_wp_error( $result ) ? $result->get_error_code() : 'image-settings-saved' );
+	}
+
+	/** Generates, validates, records safe metadata, and explicitly deletes one test image. */
+	public static function handle_test_image_generation(): void {
+		self::require_permission();
+		check_admin_referer( self::TEST_IMAGE_ACTION, 'aics_test_image_nonce' );
+		$topic = isset( $_POST['image_test_topic'] ) && is_string( $_POST['image_test_topic'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['image_test_topic'] ) ) ) : '';
+		if ( '' === $topic || self::text_length( $topic ) > 250 ) {
+			self::store_image_test_result( array( 'success' => false, 'code' => 'invalid_image_test_topic', 'message' => __( 'Enter a valid test topic of 250 characters or fewer.', 'ai-content-studio' ) ) );
+			self::redirect( 'image-test-result' );
+		}
+		$started_at = microtime( true ); $result = null; $temporary = null; $safe = array();
+		try {
+			$result = ( new AICS_Featured_Image_Generation_Service() )->generate( array( 'title' => $topic, 'summary' => $topic ), false );
+			$temporary = $result->get_temporary_file();
+			$safe = array( 'success' => $result->is_success(), 'code' => $result->get_error_code(), 'message' => $result->get_message(), 'provider' => $result->get_provider(), 'model' => $result->get_model(), 'width' => $result->get_width(), 'height' => $result->get_height(), 'format' => $result->get_output_type(), 'http_status' => $result->get_http_status(), 'file_validation' => $result->is_success() ? 'passed' : '' );
+		} finally {
+			$deleted = ! $temporary instanceof AICS_Temporary_Image_File || $temporary->cleanup();
+			$safe['temporary_deleted'] = $deleted;
+			if ( ! $deleted ) { $safe = array( 'success' => false, 'code' => 'temporary_image_cleanup_failed', 'message' => __( 'The generated test image could not be deleted safely.', 'ai-content-studio' ), 'temporary_deleted' => false ); }
+		}
+		AICS_Usage_Logger::log( array( 'event_type' => 'system_test', 'operation' => 'image_generation_test', 'status' => ! empty( $safe['success'] ) ? 'success' : 'failed', 'provider' => $safe['provider'] ?? '', 'model' => $safe['model'] ?? '', 'error_code' => $safe['code'] ?? '', 'duration_ms' => AICS_Usage_Logger::duration_ms( $started_at ), 'metadata' => array( 'test_type' => 'image_generation', 'http_status' => absint( $safe['http_status'] ?? 0 ) ) ) );
+		self::store_image_test_result( $safe );
+		self::redirect( 'image-test-result' );
 	}
 
 	/**
@@ -239,6 +279,7 @@ final class AICS_Settings_Page {
 	 */
 	private static function render_notice(): void {
 		$notice = isset( $_GET['aics_notice'] ) && is_string( $_GET['aics_notice'] ) ? sanitize_key( wp_unslash( $_GET['aics_notice'] ) ) : '';
+		if ( 'image-test-result' === $notice ) { self::render_image_test_result(); return; }
 		$notices = array(
 			'settings-saved'    => array( 'success', __( 'Settings saved.', 'ai-content-studio' ) ),
 			'api-key-removed'   => array( 'success', __( 'API key removed.', 'ai-content-studio' ) ),
@@ -267,6 +308,11 @@ final class AICS_Settings_Page {
 		<div class="notice notice-<?php echo esc_attr( $notices[ $notice ][0] ); ?> is-dismissible"><p><?php echo esc_html( $notices[ $notice ][1] ); ?></p></div>
 		<?php
 	}
+
+	private static function store_image_test_result( array $result ): void { set_transient( self::IMAGE_TEST_TRANSIENT_PREFIX . get_current_user_id(), $result, 2 * MINUTE_IN_SECONDS ); }
+	private static function render_image_test_result(): void { $key=self::IMAGE_TEST_TRANSIENT_PREFIX.get_current_user_id();$result=get_transient($key);delete_transient($key);if(!is_array($result)){return;}$success=!empty($result['success'])&&!empty($result['temporary_deleted']);?><div class="notice notice-<?php echo $success?'success':'error';?> is-dismissible"><p><strong><?php echo esc_html($success?__('Image generation succeeded.','ai-content-studio'):($result['message']??__('Image generation failed.','ai-content-studio')));?></strong></p><?php if($success):?><ul><li><?php echo esc_html__('Provider: ','ai-content-studio').esc_html(AICS_Image_Provider_Factory::provider_options()[$result['provider']]??$result['provider']);?></li><li><?php echo esc_html__('Model: ','ai-content-studio').esc_html($result['model']);?></li><li><?php echo esc_html__('Dimensions: ','ai-content-studio').esc_html(absint($result['width']).' × '.absint($result['height']));?></li><li><?php echo esc_html__('Format: ','ai-content-studio').esc_html(strtoupper($result['format']));?></li><li><?php esc_html_e('File validation: Passed','ai-content-studio');?></li><li><?php esc_html_e('Temporary file: Deleted','ai-content-studio');?></li></ul><?php elseif(!empty($result['code'])):?><p><code><?php echo esc_html(sanitize_key($result['code']));?></code></p><?php endif;?></div><?php }
+	private static function visual_style_labels():array{return array('editorial'=>__('Editorial','ai-content-studio'),'photorealistic'=>__('Photorealistic','ai-content-studio'),'modern_illustration'=>__('Modern Illustration','ai-content-studio'),'minimal_3d'=>__('Minimal 3D','ai-content-studio'),'flat_illustration'=>__('Flat Illustration','ai-content-studio'));}
+	private static function text_length(string $value):int{return function_exists('mb_strlen')?mb_strlen($value,'UTF-8'):strlen($value);}
 
 	/**
 	 * Prevent instantiation.
