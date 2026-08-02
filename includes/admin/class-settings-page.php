@@ -20,6 +20,8 @@ final class AICS_Settings_Page {
 	private const SAVE_IMAGE_ACTION = 'aics_save_featured_image_settings';
 	private const TEST_IMAGE_ACTION = 'aics_test_image_generation';
 	private const IMAGE_TEST_TRANSIENT_PREFIX = 'aics_image_test_result_';
+	private const TEST_PIPELINE_ACTION = 'aics_test_featured_image_pipeline';
+	private const PIPELINE_TEST_TRANSIENT_PREFIX = 'aics_pipeline_test_result_';
 
 	/**
 	 * Registers settings write handlers.
@@ -32,6 +34,7 @@ final class AICS_Settings_Page {
 		add_action( 'admin_post_' . self::TEST_ACTION, array( self::class, 'handle_test_connection' ) );
 		add_action( 'admin_post_' . self::SAVE_IMAGE_ACTION, array( self::class, 'handle_save_featured_images' ) );
 		add_action( 'admin_post_' . self::TEST_IMAGE_ACTION, array( self::class, 'handle_test_image_generation' ) );
+		add_action( 'admin_post_' . self::TEST_PIPELINE_ACTION, array( self::class, 'handle_test_featured_image_pipeline' ) );
 	}
 
 	/**
@@ -116,7 +119,7 @@ final class AICS_Settings_Page {
 					<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_IMAGE_ACTION ); ?>">
 					<?php wp_nonce_field( self::SAVE_IMAGE_ACTION, 'aics_featured_image_settings_nonce' ); ?>
 					<table class="form-table" role="presentation">
-						<tr><th scope="row"><?php esc_html_e( 'Default image generation', 'ai-content-studio' ); ?></th><td><label><input type="checkbox" name="image_enabled" value="1" <?php checked( $image_settings['enabled'] ); ?>> <?php esc_html_e( 'Enable featured-image generation by default', 'ai-content-studio' ); ?></label><p class="description"><?php esc_html_e( 'No images are generated until a later pipeline task connects this setting to generation.', 'ai-content-studio' ); ?></p></td></tr>
+						<tr><th scope="row"><?php esc_html_e( 'Default image generation', 'ai-content-studio' ); ?></th><td><label><input type="checkbox" name="image_enabled" value="1" <?php checked( $image_settings['enabled'] ); ?>> <?php esc_html_e( 'Enable featured-image generation by default', 'ai-content-studio' ); ?></label><p class="description"><?php esc_html_e( 'These defaults are used by the image tests. Manual Studio and automation integration will be added in later tasks.', 'ai-content-studio' ); ?></p></td></tr>
 						<tr><th scope="row"><label for="aics-image-provider"><?php esc_html_e( 'Image provider', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-provider" name="image_provider"><?php foreach ( AICS_Image_Provider_Factory::provider_options() as $provider_key => $provider_name ) : ?><option value="<?php echo esc_attr( $provider_key ); ?>" <?php selected( $image_settings['provider'], $provider_key ); ?>><?php echo esc_html( $provider_name ); ?></option><?php endforeach; ?></select></td></tr>
 						<tr><th scope="row"><label for="aics-image-model"><?php esc_html_e( 'Image model', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-model" name="image_model"><?php foreach ( $image_capabilities['supported_models'] ?? array() as $image_model ) : ?><option value="<?php echo esc_attr( $image_model ); ?>" <?php selected( $image_settings['model'], $image_model ); ?>><?php echo esc_html( $image_model ); ?></option><?php endforeach; ?></select></td></tr>
 						<tr><th scope="row"><label for="aics-image-aspect-ratio"><?php esc_html_e( 'Default aspect ratio', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-aspect-ratio" name="image_aspect_ratio"><?php foreach ( array( 'landscape' => __( 'Landscape', 'ai-content-studio' ), 'square' => __( 'Square', 'ai-content-studio' ), 'portrait' => __( 'Portrait', 'ai-content-studio' ) ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['aspect_ratio'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
@@ -135,6 +138,17 @@ final class AICS_Settings_Page {
 						<label for="aics-image-test-topic"><strong><?php esc_html_e( 'Test topic', 'ai-content-studio' ); ?></strong></label><br>
 						<input id="aics-image-test-topic" class="regular-text" type="text" name="image_test_topic" maxlength="250" value="<?php echo esc_attr__( 'Modern content strategy for small businesses', 'ai-content-studio' ); ?>">
 						<?php submit_button( __( 'Generate and Validate Test Image', 'ai-content-studio' ), 'secondary' ); ?>
+					</form>
+				</div>
+				<div class="aics-connection-actions">
+					<h3><?php esc_html_e( 'Test Media Library and Featured Image', 'ai-content-studio' ); ?></h3>
+					<p><?php esc_html_e( 'This test generates an image, adds it to the Media Library, and assigns it to the selected AI Content Studio draft. Use a disposable draft. Repeating the test must reuse the existing image rather than create a duplicate.', 'ai-content-studio' ); ?></p>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_PIPELINE_ACTION ); ?>">
+						<?php wp_nonce_field( self::TEST_PIPELINE_ACTION, 'aics_test_pipeline_nonce' ); ?>
+						<label for="aics-pipeline-test-post"><strong><?php esc_html_e( 'Disposable AI Content Studio Draft Post ID', 'ai-content-studio' ); ?></strong></label><br>
+						<input id="aics-pipeline-test-post" class="small-text" type="number" min="1" step="1" name="pipeline_test_post_id" required>
+						<?php submit_button( __( 'Test Full Featured-Image Pipeline', 'ai-content-studio' ), 'secondary' ); ?>
 					</form>
 				</div>
 			</div>
@@ -216,6 +230,17 @@ final class AICS_Settings_Page {
 		self::redirect( 'image-test-result' );
 	}
 
+	/** Runs the persistent pipeline only for a server-verified disposable AICS draft. */
+	public static function handle_test_featured_image_pipeline(): void {
+		self::require_permission();check_admin_referer(self::TEST_PIPELINE_ACTION,'aics_test_pipeline_nonce');
+		$post_id=absint($_POST['pipeline_test_post_id']??0);$post=$post_id?get_post($post_id):null;$article=(new AICS_Article_Repository())->get_by_wordpress_post_id($post_id);
+		if(!$post instanceof WP_Post||'post'!==$post->post_type||'draft'!==$post->post_status||'1'!==(string)get_post_meta($post_id,'_aics_generated_post',true)||!current_user_can('edit_post',$post_id)||!$article||absint(get_post_meta($post_id,'_aics_article_id',true))!==$article['id']||sanitize_text_field((string)get_post_meta($post_id,'_aics_article_uuid',true))!==$article['article_uuid']){
+			self::store_pipeline_test_result(array('success'=>false,'code'=>'featured_image_post_invalid','message'=>__('The selected post is not an AI Content Studio draft.','ai-content-studio')));self::redirect('pipeline-test-result');
+		}
+		$result=(new AICS_Featured_Image_Pipeline_Service())->run($article['id'],get_current_user_id(),false);$result['article_title']=sanitize_text_field((string)$article['title']);
+		self::store_pipeline_test_result($result);self::redirect('pipeline-test-result');
+	}
+
 	/**
 	 * Tests the saved OpenAI configuration without changing settings.
 	 *
@@ -280,6 +305,7 @@ final class AICS_Settings_Page {
 	private static function render_notice(): void {
 		$notice = isset( $_GET['aics_notice'] ) && is_string( $_GET['aics_notice'] ) ? sanitize_key( wp_unslash( $_GET['aics_notice'] ) ) : '';
 		if ( 'image-test-result' === $notice ) { self::render_image_test_result(); return; }
+		if ( 'pipeline-test-result' === $notice ) { self::render_pipeline_test_result(); return; }
 		$notices = array(
 			'settings-saved'    => array( 'success', __( 'Settings saved.', 'ai-content-studio' ) ),
 			'api-key-removed'   => array( 'success', __( 'API key removed.', 'ai-content-studio' ) ),
@@ -310,6 +336,8 @@ final class AICS_Settings_Page {
 	}
 
 	private static function store_image_test_result( array $result ): void { set_transient( self::IMAGE_TEST_TRANSIENT_PREFIX . get_current_user_id(), $result, 2 * MINUTE_IN_SECONDS ); }
+	private static function store_pipeline_test_result(array $result):void{set_transient(self::PIPELINE_TEST_TRANSIENT_PREFIX.get_current_user_id(),$result,2*MINUTE_IN_SECONDS);}
+	private static function render_pipeline_test_result():void{$key=self::PIPELINE_TEST_TRANSIENT_PREFIX.get_current_user_id();$r=get_transient($key);delete_transient($key);if(!is_array($r)){return;}$success=!empty($r['success']);?><div class="notice notice-<?php echo esc_attr($success?'success':'error');?> is-dismissible"><p><strong><?php echo esc_html($success?__('Featured-image pipeline succeeded.','ai-content-studio'):($r['message']??__('The featured-image pipeline failed.','ai-content-studio')));?></strong></p><?php if($success):?><ul><li><?php echo esc_html__('Article: ','ai-content-studio').esc_html($r['article_title']??('#'.absint($r['article_id']??0)));?></li><li><?php echo esc_html__('WordPress post: ','ai-content-studio').esc_html((string)absint($r['post_id']??0));?></li><li><?php echo esc_html__('Attachment: ','ai-content-studio').esc_html((string)absint($r['attachment_id']??0));?></li><li><?php echo esc_html__('Image dimensions: ','ai-content-studio').esc_html(absint($r['width']??0).' × '.absint($r['height']??0));?></li><li><?php echo esc_html__('Image format: ','ai-content-studio').esc_html(strtoupper((string)($r['format']??'')));?></li><li><?php esc_html_e('Featured image: Assigned','ai-content-studio');?></li><li><?php echo esc_html__('Pipeline behaviour: ','ai-content-studio').esc_html(!empty($r['reused'])?__('Reused Existing Attachment','ai-content-studio'):__('Created','ai-content-studio'));?></li></ul><?php $edit=current_user_can('edit_post',absint($r['post_id']??0))?get_edit_post_link(absint($r['post_id']),''):'';$media=current_user_can('edit_post',absint($r['attachment_id']??0))?get_edit_post_link(absint($r['attachment_id']),''):'';if($edit||$media):?><p><?php if($edit):?><a href="<?php echo esc_url($edit);?>"><?php esc_html_e('Edit WordPress post','ai-content-studio');?></a><?php endif;?><?php if($edit&&$media):?> | <?php endif;?><?php if($media):?><a href="<?php echo esc_url($media);?>"><?php esc_html_e('View attachment in Media Library','ai-content-studio');?></a><?php endif;?></p><?php endif;?><?php elseif(!empty($r['code'])):?><p><code><?php echo esc_html(sanitize_key($r['code']));?></code></p><?php endif;?></div><?php }
 	private static function render_image_test_result(): void { $key=self::IMAGE_TEST_TRANSIENT_PREFIX.get_current_user_id();$result=get_transient($key);delete_transient($key);if(!is_array($result)){return;}$success=!empty($result['success'])&&!empty($result['temporary_deleted']);?><div class="notice notice-<?php echo $success?'success':'error';?> is-dismissible"><p><strong><?php echo esc_html($success?__('Image generation succeeded.','ai-content-studio'):($result['message']??__('Image generation failed.','ai-content-studio')));?></strong></p><?php if($success):?><ul><li><?php echo esc_html__('Provider: ','ai-content-studio').esc_html(AICS_Image_Provider_Factory::provider_options()[$result['provider']]??$result['provider']);?></li><li><?php echo esc_html__('Model: ','ai-content-studio').esc_html($result['model']);?></li><li><?php echo esc_html__('Dimensions: ','ai-content-studio').esc_html(absint($result['width']).' × '.absint($result['height']));?></li><li><?php echo esc_html__('Format: ','ai-content-studio').esc_html(strtoupper($result['format']));?></li><li><?php esc_html_e('File validation: Passed','ai-content-studio');?></li><li><?php esc_html_e('Temporary file: Deleted','ai-content-studio');?></li></ul><?php elseif(!empty($result['code'])):?><p><code><?php echo esc_html(sanitize_key($result['code']));?></code></p><?php endif;?></div><?php }
 	private static function visual_style_labels():array{return array('editorial'=>__('Editorial','ai-content-studio'),'photorealistic'=>__('Photorealistic','ai-content-studio'),'modern_illustration'=>__('Modern Illustration','ai-content-studio'),'minimal_3d'=>__('Minimal 3D','ai-content-studio'),'flat_illustration'=>__('Flat Illustration','ai-content-studio'));}
 	private static function text_length(string $value):int{return function_exists('mb_strlen')?mb_strlen($value,'UTF-8'):strlen($value);}

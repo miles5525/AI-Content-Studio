@@ -5,9 +5,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 final class AICS_Featured_Image_State {
 	private const STATUSES = array( 'not_requested','pending','generating','uploaded','attached','retrying','failed','needs_attention','skipped' );
 	private const TRANSITIONS = array(
-		'not_requested'=>array('pending','skipped'),'pending'=>array('generating','skipped','failed'),
-		'generating'=>array('uploaded','retrying','failed','needs_attention'),'retrying'=>array('generating','failed','needs_attention'),
-		'failed'=>array('pending','needs_attention','skipped'),'needs_attention'=>array('pending','skipped'),
+		'not_requested'=>array('pending','skipped'),'pending'=>array('generating','uploaded','skipped','failed'),
+		'generating'=>array('uploaded','retrying','failed','needs_attention'),'retrying'=>array('generating','uploaded','failed','needs_attention'),
+		'failed'=>array('pending','uploaded','needs_attention','skipped'),'needs_attention'=>array('pending','uploaded','skipped'),
 		'uploaded'=>array('attached','retrying','failed','needs_attention'),'attached'=>array(),'skipped'=>array('pending'),
 	);
 	private const ERRORS = array(
@@ -17,6 +17,11 @@ final class AICS_Featured_Image_State {
 		'image_file_validation_failed'=>'The image file did not pass validation.','media_library_upload_failed'=>'The image could not be added to the Media Library.',
 		'attachment_persistence_failed'=>'The image attachment could not be stored.','featured_image_assignment_failed'=>'The featured image could not be assigned.',
 		'featured_image_ownership_conflict'=>'Featured image ownership could not be verified.','image_retry_exhausted'=>'The featured image retry limit was reached.',
+		'image_provider_not_configured'=>'The image provider is not configured.','image_provider_authentication_failed'=>'The image provider rejected its credentials.',
+		'image_provider_permission_denied'=>'The image provider denied image generation.','image_base64_decode_failed'=>'The generated image data was invalid.',
+		'image_file_too_large'=>'The generated image was too large.','temporary_image_creation_failed'=>'The temporary image could not be created.',
+		'image_generation_not_supported'=>'The requested image generation is unsupported.','featured_image_post_invalid'=>'The associated WordPress post is invalid.',
+		'featured_image_attachment_missing'=>'The associated image attachment is missing.','featured_image_ownership_incomplete'=>'The image ownership metadata is incomplete.',
 	);
 	public static function statuses():array{return self::STATUSES;}
 	public static function is_supported($status):bool{return is_scalar($status)&&in_array(sanitize_key((string)$status),self::STATUSES,true);}

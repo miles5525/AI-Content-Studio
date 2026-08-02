@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class AICS_Usage_Logger {
 	public const RETENTION_DAYS = 30;
 	private const EVENTS = array( 'ai_request', 'post_creation', 'system_test' );
-	private const OPERATIONS = array( 'openai_connection_test', 'image_generation_test', 'generate_blog_ideas', 'evaluate_content_ideas', 'generate_article_draft', 'create_wordpress_draft' );
+	private const OPERATIONS = array( 'openai_connection_test', 'image_generation_test', 'featured_image_generation', 'generate_blog_ideas', 'evaluate_content_ideas', 'generate_article_draft', 'create_wordpress_draft' );
 	private const STATUSES = array( 'success', 'failed' );
 	private const METADATA_KEYS = array( 'idea_count', 'evaluated_count', 'eligible_count', 'source', 'requested_length', 'tone', 'post_status', 'test_type', 'validation_category', 'http_status' );
 	private const VALIDATION_CATEGORIES = array( 'dangerous_attribute', 'dangerous_url', 'dangerous_markup', 'length', 'sanitization', 'structure' );

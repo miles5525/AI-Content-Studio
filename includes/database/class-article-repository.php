@@ -379,6 +379,21 @@ final class AICS_Article_Repository {
 		$now=self::now();$sets[]='updated_at=%s';$values[]=$now;$values[]=$id;$values[]=$expected;$sql=$wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND featured_image_status=%s",$values);$changed=$wpdb->query($sql);return 1===$changed?self::simple(true,$id,'featured_image_status_updated'):self::simple(false,$id,false===$changed?'database_update_failed':(null===$this->get_by_id($id)?'article_not_found':'featured_image_state_changed'));
 	}
 
+	/** Atomically persists a validated upload before featured-image assignment. */
+	public function mark_featured_image_uploaded( $article_id, $expected_status, $attachment_id, array $metadata=array() ): array {
+		global $wpdb;
+		$id=absint($article_id);$attachment=absint($attachment_id);$expected=AICS_Featured_Image_State::is_supported($expected_status)?sanitize_key((string)$expected_status):'';$article=$this->get_by_id($id);
+		if(!$article){return self::simple(false,0,'article_not_found');}if(!$attachment||!get_post($attachment)||!AICS_Featured_Image_State::can_transition($expected,'uploaded')){return self::simple(false,$id,'invalid_featured_image_attachment');}
+		$current=absint($article['featured_image_attachment_id']);if($current&&$current!==$attachment){return self::simple(false,$id,'featured_image_attachment_conflict');}
+		$alt=self::nullable_text($metadata['alt_text']??$article['featured_image_alt_text'],1000);$provider=self::nullable_text($metadata['provider']??$article['featured_image_provider'],64);$model=self::nullable_text($metadata['model']??$article['featured_image_model'],100);
+		if(false===$alt||false===$provider||false===$model){return self::simple(false,$id,'invalid_featured_image_metadata');}
+		$now=self::now();$sets=array("featured_image_status='uploaded'",'featured_image_attachment_id=%d','featured_image_generated_at=COALESCE(featured_image_generated_at,%s)','featured_image_uploaded_at=COALESCE(featured_image_uploaded_at,%s)','featured_image_last_error_code=NULL');$values=array($attachment,$now,$now);
+		foreach(array('featured_image_alt_text'=>$alt,'featured_image_provider'=>$provider,'featured_image_model'=>$model) as $field=>$value){$sets[]=$field.'='.(null===$value?'NULL':'%s');if(null!==$value){$values[]=$value;}}
+		$sets[]='updated_at=%s';$values[]=$now;$values[]=$id;$values[]=$expected;$values[]=$attachment;
+		$changed=$wpdb->query($wpdb->prepare("UPDATE {$this->table()} SET ".implode(',',$sets)." WHERE id=%d AND featured_image_status=%s AND (featured_image_attachment_id IS NULL OR featured_image_attachment_id=%d)",$values));
+		if(1===$changed){return self::simple(true,$id,'featured_image_upload_persisted');}if(false===$changed){return self::simple(false,$id,'database_update_failed');}$fresh=$this->get_by_id($id);return $fresh&&'uploaded'===$fresh['featured_image_status']&&$attachment===$fresh['featured_image_attachment_id']?self::simple(true,$id,'featured_image_upload_already_persisted'):self::simple(false,$id,'featured_image_state_changed');
+	}
+
 	/** Idempotently associates one attachment and advances uploaded to attached. */
 	public function associate_featured_image_attachment( $article_id, $expected_status, $attachment_id, array $metadata=array() ): array {
 		global $wpdb;$id=absint($article_id);$attachment=absint($attachment_id);if(0===$id||0===$attachment){return self::simple(false,$id,'invalid_featured_image_attachment');}$article=$this->get_by_id($id);if(!$article){return self::simple(false,0,'article_not_found');}$current=absint($article['featured_image_attachment_id']);if('attached'===$article['featured_image_status']&&$current===$attachment){return self::simple(true,$id,'featured_image_attachment_already_associated');}if($current&&$current!==$attachment){return self::simple(false,$id,'featured_image_attachment_conflict');}

@@ -45,6 +45,10 @@ require_once AICS_PLUGIN_DIR . 'includes/providers/class-openai-image-provider.p
 require_once AICS_PLUGIN_DIR . 'includes/providers/class-image-provider-factory.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-settings.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-generation-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-ownership-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-media-library-image-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-assignment-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-pipeline-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-usage-logger.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-schedule-calculator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-profile-service.php';
