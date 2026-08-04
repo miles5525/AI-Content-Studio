@@ -3,8 +3,8 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class AICS_Automation_Run_Recovery_Planner {
-	private const EXECUTABLE = array( 'pending','generate_ideas','evaluate_ideas','queue_idea','generate_article','create_post','schedule_post','publish_post','finalize' );
-	private const RETRYABLE = array( 'provider_request_failed','provider_network_error','provider_rate_limit','idea_persistence_failed','idea_transition_failed','article_persistence_failed','article_transition_failed','wordpress_post_creation_failed','wordpress_schedule_failed','wordpress_publish_failed','no_future_publishing_slot','planned_publish_time_save_failed','article_schedule_sync_failed','article_publish_sync_failed' );
+	private const EXECUTABLE = array( 'pending','generate_ideas','evaluate_ideas','queue_idea','generate_article','create_post','generate_featured_image','schedule_post','publish_post','finalize' );
+	private const RETRYABLE = array( 'provider_request_failed','provider_network_error','provider_rate_limit','idea_persistence_failed','idea_transition_failed','article_persistence_failed','article_transition_failed','wordpress_post_creation_failed','wordpress_schedule_failed','wordpress_publish_failed','no_future_publishing_slot','planned_publish_time_save_failed','article_schedule_sync_failed','article_publish_sync_failed','image_provider_rate_limited','image_provider_timeout','image_provider_request_failed','media_library_upload_failed','featured_image_assignment_failed','temporary_image_creation_failed','attachment_persistence_failed' );
 	private AICS_Automation_Run_Repository $runs;
 	private AICS_Content_Idea_Repository $ideas;
 	private AICS_Article_Repository $articles;
@@ -31,7 +31,7 @@ final class AICS_Automation_Run_Recovery_Planner {
 	private function retry(array $run):array{
 		if(!in_array($run['status'],array('retrying','failed'),true)||!in_array($run['current_step'],self::EXECUTABLE,true)){return $this->deny('retry','retry_not_allowed');}
 		$error=(string)($run['last_error_code']??'');$articles=$this->articles->get_articles_for_run($run['id'],array('limit'=>100));
-		$article_retry=false;foreach($articles as $article){if(in_array($article['status'],array('needs_attention','failed'),true)&&in_array($article['last_error_code'],self::RETRYABLE,true)){$article_retry=true;break;}}
+		$article_retry=false;foreach($articles as $article){if(in_array($article['status'],array('needs_attention','failed'),true)&&(in_array($article['last_error_code'],self::RETRYABLE,true)||in_array($article['featured_image_last_error_code']??'',self::RETRYABLE,true))){$article_retry=true;break;}}
 		if(!in_array($error,self::RETRYABLE,true)&&!$article_retry){return $this->deny('retry','non_retryable_error');}
 		$safety=$this->post_safety($run,$articles);if(true!==$safety){return $this->deny('retry',$safety);}
 		return $this->allow('retry','queued',$run['current_step'],'failed'===$run['status'],$error?:'retryable_article_error');
@@ -51,7 +51,7 @@ final class AICS_Automation_Run_Recovery_Planner {
 		return $this->allow('resume','queued',$target,false,$reason);
 	}
 
-	private function post_safety(array $run,?array $articles=null){$step=$run['current_step'];if(!in_array($step,array('create_post','schedule_post','publish_post','finalize'),true)){return true;}$articles=$articles??$this->articles->get_articles_for_run($run['id'],array('limit'=>100));if(!$articles){return 'resume_not_allowed';}$delivery=new AICS_Automation_Delivery_Service();foreach($articles as $article){if('rejected'===$article['status']){continue;}$post_id=absint($article['wordpress_post_id']);if(!$post_id){if('create_post'===$step){continue;}return 'ownership_conflict';}$owned=$delivery->validate_article_post_ownership($article);if(empty($owned['success'])){return 'ownership_conflict';}}return true;}
+	private function post_safety(array $run,?array $articles=null){$step=$run['current_step'];if(!in_array($step,array('create_post','generate_featured_image','schedule_post','publish_post','finalize'),true)){return true;}$articles=$articles??$this->articles->get_articles_for_run($run['id'],array('limit'=>100));if(!$articles){return 'resume_not_allowed';}$delivery=new AICS_Automation_Delivery_Service();foreach($articles as $article){if('rejected'===$article['status']){continue;}$post_id=absint($article['wordpress_post_id']);if(!$post_id){if('create_post'===$step){continue;}return 'ownership_conflict';}$owned=$delivery->validate_article_post_ownership($article);if(empty($owned['success'])){return 'ownership_conflict';}}return true;}
 	private function configuration_is_safe(array $run):bool{$profile=(new AICS_Automation_Profile_Repository())->get_by_id(absint($run['profile_id']??0));if(!$profile){return false;}$effective=$this->runs->get_effective_configuration($run,$profile);return !empty($effective['success']);}
 	private function lock_state(array $run):string{if(empty($run['has_lock_token'])){return 'absent';}$expires=$run['lock_expires_at']??null;return is_string($expires)&&$expires>current_time('mysql',true)?'active':'expired';}
 	private function allow(string $action,string $status,string $step,bool $reset,string $reason):array{return array('allowed'=>true,'action'=>$action,'status'=>$status,'step'=>$step,'reset_attempts'=>$reset,'reason_code'=>$reason,'message_code'=>$action.'_available');}

@@ -25,10 +25,10 @@ final class AICS_Automation_Worker {
 	public function process(): array {
 		$result = array( 'success'=>true,'code'=>'no_claimable_runs','runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0,'posts_created'=>0 );
 		try {
-			$steps = array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article', 'create_post', 'schedule_post', 'publish_post', 'finalize' );
+			$steps = array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article', 'create_post', 'generate_featured_image', 'schedule_post', 'publish_post', 'finalize' );
 			$candidates = $this->runs->get_claimable_runs( current_time( 'mysql', true ), $steps, 1 );
 			if ( ! $candidates ) { return $result; }
-			$result['runs_checked'] = 1; $ttl = in_array( $candidates[0]['current_step'], array( 'queue_idea', 'generate_article' ), true ) ? 1800 : ( in_array( $candidates[0]['current_step'], array( 'create_post', 'schedule_post', 'publish_post', 'finalize' ), true ) ? 600 : 900 );
+			$result['runs_checked'] = 1; $ttl = in_array( $candidates[0]['current_step'], array( 'queue_idea', 'generate_article' ), true ) ? 1800 : ( in_array( $candidates[0]['current_step'], array( 'create_post', 'generate_featured_image', 'schedule_post', 'publish_post', 'finalize' ), true ) ? 600 : 900 );
 			$claim = $this->runs->claim_run( $candidates[0]['id'], $ttl );
 			if ( ! ( $claim['success'] ?? false ) ) { return $this->failed( $result, 'run_claim_failed' ); }
 			$result['runs_claimed'] = 1; $token = $claim['lock_token']; $run = $this->runs->get_by_id( $candidates[0]['id'] );
@@ -39,6 +39,7 @@ final class AICS_Automation_Worker {
 			$effective = $this->runs->get_effective_configuration( $run, $profile );
 			if ( empty( $effective['success'] ) ) { $this->runs->mark_failed( $run['id'], $token, $effective['code'] ); return $this->failed( $result, $effective['code'] ); }
 			$profile = array_merge( $profile, $effective['configuration'] );
+			if ( 'generate_featured_image' === $run['current_step'] ) { return $this->featured_image_step( $profile, $run, $token, $result ); }
 			if ( 'evaluate_ideas' === $run['current_step'] ) { return $this->evaluate_step( $profile, $run, $token, $result ); }
 			if ( 'create_post' === $run['current_step'] ) { return $this->create_post_step( $profile, $run, $token, $result ); }
 			if ( in_array( $run['current_step'], array( 'schedule_post','publish_post' ), true ) ) { return $this->delivery_step( $profile, $run, $token, $result ); }
@@ -54,11 +55,19 @@ final class AICS_Automation_Worker {
 		} catch ( Throwable $exception ) { if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) { error_log( 'AI Content Studio worker stopped with controlled code: unexpected_worker_error' ); } return $this->failed( $result, 'unexpected_worker_error' ); }
 	}
 
+	private function featured_image_step(array $profile,array $run,string $token,array $result):array{
+		$processed=(new AICS_Automation_Featured_Image_Service($this->articles))->process_one($run,$profile);
+		if(empty($processed['success'])){return $this->handle_failure($run,$token,$processed,$result);}
+		if(empty($processed['complete'])){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$processed['code'];$result['images_processed']=1;return $result;}
+		$settings=is_array($profile['publishing_settings']??null)?$profile['publishing_settings']:array();$rules=is_array($profile['workflow_rules']??null)?$profile['workflow_rules']:array();$mode=$settings['publishing_mode']??'draft';$step='draft'===$mode?'finalize':(!empty($rules['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post'));
+		if(!($this->runs->update_step($run['id'],$token,$step)['success']??false)){return $this->failed($result,'run_step_update_failed');}if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']='featured_images_complete';return $result;
+	}
+
 	private function delivery_step( array $profile, array $run, string $token, array $result ): array {
 		$mode=$profile['publishing_settings']['publishing_mode']??'';$expected='schedule_post'===$run['current_step']?'schedule':'publish';if($mode!==$expected){return $this->handle_failure($run,$token,array('code'=>'invalid_publishing_mode','retryable'=>false),$result);}
 		$articles=$this->articles->get_articles_for_run($run['id'],array('profile_id'=>$profile['id'],'limit'=>100,'orderby'=>'created_at','order'=>'ASC'));usort($articles,static function($a,$b){if(null===$a['planned_publish_at']&&null!==$b['planned_publish_at']){return 1;}if(null!==$a['planned_publish_at']&&null===$b['planned_publish_at']){return -1;}return ($a['planned_publish_at']<=>$b['planned_publish_at'])?:($a['created_at']<=>$b['created_at'])?:($a['id']<=>$b['id']);});
 		if(!$articles){return $this->handle_failure($run,$token,array('code'=>'run_not_ready_to_finalize','retryable'=>false),$result);}$candidate=null;foreach($articles as $article){if('rejected'===$article['status']){continue;}if('draft_created'===$article['status']){$candidate=$article;break;}if(!in_array($article['status'],array('scheduled','published'),true)){return $this->delivery_failure($run,$token,array('code'=>'article_post_missing','retryable'=>false,'article_id'=>$article['id']),$result);}$owned=$this->delivery->validate_article_post_ownership($article);if(empty($owned['success'])){return $this->delivery_failure($run,$token,array('code'=>$owned['code'],'retryable'=>false,'article_id'=>$article['id']),$result);}if('scheduled'===$article['status']&&'publish'===$owned['post']->post_status){$candidate=$article;break;}if('scheduled'===$article['status']&&'future'!==$owned['post']->post_status){return $this->delivery_failure($run,$token,array('code'=>'invalid_wordpress_post_status','retryable'=>false,'article_id'=>$article['id']),$result);}if('published'===$article['status']&&'publish'!==$owned['post']->post_status){return $this->delivery_failure($run,$token,array('code'=>'invalid_wordpress_post_status','retryable'=>false,'article_id'=>$article['id']),$result);}}
-		if($candidate){if('schedule'===$mode){$slot=$this->publishing_slot($profile,$articles,$candidate);if(!$slot){return $this->delivery_failure($run,$token,array('code'=>'no_future_publishing_slot','retryable'=>false,'article_id'=>$candidate['id']),$result);}$delivered=$this->delivery->schedule_article_post($candidate['id'],$slot);}else{$delivered=$this->delivery->publish_article_post($candidate['id']);}if(empty($delivered['success'])){return $this->delivery_failure($run,$token,$delivered,$result);}if($this->articles->count_articles(array('run_id'=>$run['id'],'profile_id'=>$profile['id'],'status'=>'draft_created'))>0){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$delivered['code'];return $result;}}
+		if($candidate){$image_guard=(new AICS_Automation_Featured_Image_Service($this->articles))->delivery_allowed($candidate,is_array($profile['featured_image_settings']??null)?$profile['featured_image_settings']:array());if(empty($image_guard['success'])){return $this->delivery_failure($run,$token,array('code'=>$image_guard['code'],'retryable'=>false,'article_id'=>$candidate['id']),$result);}if('schedule'===$mode){$slot=$this->publishing_slot($profile,$articles,$candidate);if(!$slot){return $this->delivery_failure($run,$token,array('code'=>'no_future_publishing_slot','retryable'=>false,'article_id'=>$candidate['id']),$result);}$delivered=$this->delivery->schedule_article_post($candidate['id'],$slot);}else{$delivered=$this->delivery->publish_article_post($candidate['id']);}if(empty($delivered['success'])){return $this->delivery_failure($run,$token,$delivered,$result);}if($this->articles->count_articles(array('run_id'=>$run['id'],'profile_id'=>$profile['id'],'status'=>'draft_created'))>0){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$delivered['code'];return $result;}}
 		if(!($this->runs->refresh_lock($run['id'],$token,600)['success']??false)){return $this->failed($result,'execution_lock_lost');}if(!($this->runs->update_step($run['id'],$token,'finalize')['success']??false)){return $this->failed($result,'run_step_update_failed');}if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']='delivery_completed';return $result;
 	}
 
@@ -83,7 +92,7 @@ final class AICS_Automation_Worker {
 		$delivered = array_values( array_filter( $all, static fn($item)=>$item['profile_id']===absint($profile['id'])&&'automation'===$item['source_type']&&in_array($item['status'],array('draft_created','scheduled','published'),true)&&$item['wordpress_post_id']>0 ) );
 		if ( empty( $delivered ) ) { return $this->handle_post_failure( $run, $token, array('code'=>'no_approved_articles','retryable'=>false,'article_id'=>0), $result ); }
 		$settings=is_array($profile['publishing_settings']??null)?$profile['publishing_settings']:array();$rules=is_array($profile['workflow_rules']??null)?$profile['workflow_rules']:array();$mode=$settings['publishing_mode']??'draft';
-		$step='draft'===$mode?'finalize':(!empty($rules['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post'));
+		$step=!empty($profile['featured_image_settings']['enabled'])?'generate_featured_image':('draft'===$mode?'finalize':(!empty($rules['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post')));
 		if ( ! ( $this->runs->refresh_lock( $run['id'], $token, 600 )['success'] ?? false ) ) { return $this->failed( $result, 'execution_lock_lost' ); }
 		if ( ! ( $this->runs->update_step( $run['id'], $token, $step )['success'] ?? false ) ) { return $this->failed( $result, 'run_step_update_failed' ); }
 		if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');} $result['code']='wordpress_drafts_ready'; return $result;
@@ -103,7 +112,7 @@ final class AICS_Automation_Worker {
 			if ( ! $transition['success'] ) { return $this->handle_failure( $run, $token, array( 'code'=>'idea_transition_failed','retryable'=>true ), $result ); }
 			$idea = $this->ideas->get_by_id( $idea['id'] );
 		}
-		$placeholder = $this->articles->create_for_idea( $idea['id'], array( 'created_by'=>0 ) );
+		$placeholder = $this->articles->create_for_idea( $idea['id'], array( 'created_by'=>0, 'featured_image_settings'=>$profile['featured_image_settings']??array() ) );
 		if ( ! $placeholder['success'] ) { return $this->handle_failure( $run, $token, array( 'code'=>'article_persistence_failed','retryable'=>true ), $result ); }
 		$article = $this->articles->get_by_id( $placeholder['article_id'] );
 		if ( ! $article ) { return $this->handle_failure( $run, $token, array( 'code'=>'article_not_found','retryable'=>true,'article_id'=>$placeholder['article_id'] ), $result ); }

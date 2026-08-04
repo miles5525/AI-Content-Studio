@@ -203,9 +203,9 @@ final class Installer {
 		$articles_sql    = "CREATE TABLE {$articles_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			article_uuid char(36) NOT NULL,
-			idea_id bigint(20) unsigned NOT NULL DEFAULT 0,
-			profile_id bigint(20) unsigned NOT NULL DEFAULT 0,
-			run_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			idea_id bigint(20) unsigned NULL DEFAULT NULL,
+			profile_id bigint(20) unsigned NULL DEFAULT NULL,
+			run_id bigint(20) unsigned NULL DEFAULT NULL,
 			source_type varchar(20) NOT NULL DEFAULT 'automation',
 			title varchar(250) NOT NULL DEFAULT '',
 			excerpt text NULL,
@@ -294,6 +294,10 @@ final class Installer {
 		$wpdb->last_error = '';
 		dbDelta( $articles_sql );
 		$articles_error = $wpdb->last_error;
+		if ( '' === $articles_error ) {
+			$wpdb->query( "ALTER TABLE {$articles_table} MODIFY idea_id bigint(20) unsigned NULL DEFAULT NULL, MODIFY profile_id bigint(20) unsigned NULL DEFAULT NULL, MODIFY run_id bigint(20) unsigned NULL DEFAULT NULL" );
+			$articles_error = $wpdb->last_error;
+		}
 		$wpdb->last_error = '';
 		dbDelta( $actions_sql );
 		$actions_error = $wpdb->last_error;
@@ -305,9 +309,10 @@ final class Installer {
 		$ideas_exists    = $ideas_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ideas_table ) ) );
 		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
 		$featured_schema_exists = $articles_exists && self::featured_image_schema_complete();
+		$manual_schema_exists = $articles_exists && self::manual_article_schema_complete();
 		$actions_exists  = $actions_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $actions_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $featured_schema_exists && $actions_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $featured_schema_exists && $manual_schema_exists && $actions_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}
@@ -337,6 +342,13 @@ final class Installer {
 		}
 
 		return true;
+	}
+
+	/** Confirms manual articles can omit automation-only relationships. */
+	private static function manual_article_schema_complete(): bool {
+		global $wpdb;$table=$wpdb->prefix.'aics_articles';
+		foreach(array('idea_id','profile_id','run_id') as $column){$row=$wpdb->get_row($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s",$column),ARRAY_A);if(!is_array($row)||'YES'!==($row['Null']??'')){return false;}}
+		$source=$wpdb->get_row($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s",'source_type'),ARRAY_A);return is_array($source)&&false!==stripos((string)($source['Type']??''),'varchar');
 	}
 
 	/**

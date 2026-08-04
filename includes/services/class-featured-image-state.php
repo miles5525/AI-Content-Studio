@@ -22,6 +22,7 @@ final class AICS_Featured_Image_State {
 		'image_file_too_large'=>'The generated image was too large.','temporary_image_creation_failed'=>'The temporary image could not be created.',
 		'image_generation_not_supported'=>'The requested image generation is unsupported.','featured_image_post_invalid'=>'The associated WordPress post is invalid.',
 		'featured_image_attachment_missing'=>'The associated image attachment is missing.','featured_image_ownership_incomplete'=>'The image ownership metadata is incomplete.',
+		'featured_image_configuration_invalid'=>'The saved featured-image configuration is invalid.','required_featured_image_failed'=>'A required featured image could not be created.','featured_image_retry_exhausted'=>'The required featured-image retry limit was reached.','featured_image_processing_incomplete'=>'Featured-image processing is not complete.','featured_image_state_changed'=>'The featured-image state changed during processing.',
 	);
 	public static function statuses():array{return self::STATUSES;}
 	public static function is_supported($status):bool{return is_scalar($status)&&in_array(sanitize_key((string)$status),self::STATUSES,true);}
@@ -31,6 +32,6 @@ final class AICS_Featured_Image_State {
 	public static function is_retryable($status):bool{return self::is_supported($status)&&in_array(sanitize_key((string)$status),array('retrying','failed','needs_attention'),true);}
 	public static function status_label($status):string{$labels=array('not_requested'=>'Not Requested','pending'=>'Pending','generating'=>'Generating','uploaded'=>'Uploaded','attached'=>'Attached','retrying'=>'Retrying','failed'=>'Failed','needs_attention'=>'Needs Attention','skipped'=>'Skipped');$normalized=self::normalize($status);return $labels[$normalized];}
 	public static function is_error_supported($code):bool{return is_scalar($code)&&isset(self::ERRORS[sanitize_key((string)$code)]);}
-	public static function error_label($code):string{$key=is_scalar($code)?sanitize_key((string)$code):'';return self::ERRORS[$key]??'A featured image operation failed.';}
+	public static function error_label($code):string{$key=is_scalar($code)?sanitize_key((string)$code):'';return self::ERRORS[$key]??'Featured-image processing encountered an internal error.';}
 	private function __construct(){}
 }

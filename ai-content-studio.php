@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.9.0' );
-define( 'AICS_DB_VERSION', '0.10.1' );
+define( 'AICS_DB_VERSION', '0.11.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );
@@ -44,11 +44,13 @@ require_once AICS_PLUGIN_DIR . 'includes/providers/interface-image-provider.php'
 require_once AICS_PLUGIN_DIR . 'includes/providers/class-openai-image-provider.php';
 require_once AICS_PLUGIN_DIR . 'includes/providers/class-image-provider-factory.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-settings.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-featured-image-settings.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-generation-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-ownership-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-media-library-image-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-assignment-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-pipeline-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-featured-image-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-usage-logger.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-schedule-calculator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-profile-service.php';
@@ -60,6 +62,8 @@ require_once AICS_PLUGIN_DIR . 'includes/services/class-approval-workflow-servic
 require_once AICS_PLUGIN_DIR . 'includes/services/class-article-content-validator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-state.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-post-generator.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-manual-article-persistence-service.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-manual-featured-image-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-post-creator.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-delivery-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-run-inspector.php';

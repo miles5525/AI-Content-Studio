@@ -239,3 +239,5 @@
 	.aics-actions .button, .aics-dashboard-links .button { width: 100%; }
 	.aics-checkbox-grid { grid-template-columns: 1fr; }
 }
+.aics-featured-image-preview img{display:block;max-width:480px;width:100%;height:auto;border:1px solid #c3c4c7;border-radius:4px}.aics-featured-image-review form{margin-top:12px}
+.aics-approval-image-preview,.aics-run-image-preview{display:block;width:auto;max-width:150px;height:auto;max-height:150px;margin-top:8px;border-radius:4px}.aics-approval-image,.aics-run-image-details{margin-top:8px}

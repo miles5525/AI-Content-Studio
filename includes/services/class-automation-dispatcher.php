@@ -77,19 +77,34 @@ final class AICS_Automation_Dispatcher {
 				$validation_input['enabled'] = 'active' === $fresh['status'];
 				$validated                   = $profile_service->validate( $validation_input );
 				if ( empty( $validated['success'] ) ) {
+					if ( in_array( 'featured_image_configuration_invalid', $validated['errors'] ?? array(), true ) ) {
+						$profiles->update_runtime_fields( $profile_id, array( 'last_error_code'=>'featured_image_configuration_invalid', 'updated_by'=>0 ) );
+						$result['code'] = 'featured_image_configuration_invalid';
+					} else {
+						$result['code'] = 'run_configuration_snapshot_failed';
+					}
 					++$result['profiles_failed'];
-					$result['code'] = 'run_configuration_snapshot_failed';
 					continue;
 				}
 				$normalized = $validated['data'];
+				$image = AICS_Automation_Featured_Image_Settings::resolve_for_run( $normalized['content_settings']['featured_images'] ?? array() );
+				if ( is_wp_error( $image ) ) {
+					$profiles->update_runtime_fields( $profile_id, array( 'last_error_code'=>'featured_image_configuration_invalid', 'updated_by'=>0 ) );
+					++$result['profiles_failed'];
+					$result['code'] = 'featured_image_configuration_invalid';
+					continue;
+				}
+				$snapshot_content = $normalized['content_settings'];
+				unset( $snapshot_content['featured_images'] );
 				$snapshot   = array(
 					'snapshot_version'    => 1,
 					'mode'                => $normalized['mode'],
 					'business_context'    => $normalized['business_context'],
-					'content_settings'    => $normalized['content_settings'],
+					'content_settings'    => $snapshot_content,
 					'schedule_settings'   => $normalized['schedule_settings'],
 					'workflow_rules'      => $normalized['workflow_rules'],
 					'publishing_settings' => $normalized['publishing_settings'],
+					'featured_image_settings' => $image,
 				);
 				$snapshot_json = wp_json_encode( $snapshot );
 				if ( ! is_string( $snapshot_json ) || '' === $snapshot_json ) {
@@ -110,7 +125,7 @@ final class AICS_Automation_Dispatcher {
 
 				$advanced = $profiles->update_runtime_fields(
 					$profile_id,
-					array( 'next_run_at' => $no_future ? null : $next['next_run_utc'], 'updated_by' => 0 )
+					array( 'next_run_at' => $no_future ? null : $next['next_run_utc'], 'last_error_code'=>'', 'updated_by' => 0 )
 				);
 				if ( ! ( $advanced['success'] ?? false ) ) {
 					$runs->mark_cancelled( absint( $created['run_id'] ?? 0 ) );

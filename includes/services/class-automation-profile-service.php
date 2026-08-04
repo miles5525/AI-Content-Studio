@@ -73,6 +73,11 @@ final class AICS_Automation_Profile_Service {
 
 		$business = $this->business( is_array( $input['business_context'] ?? null ) ? $input['business_context'] : array(), $errors );
 		$content  = $this->content( is_array( $input['content_settings'] ?? null ) ? $input['content_settings'] : array(), $errors );
+		$image_input = is_array( $input['featured_image_settings'] ?? null ) ? $input['featured_image_settings'] : ( is_array( $input['content_settings']['featured_images'] ?? null ) ? $input['content_settings']['featured_images'] : array() );
+		$image    = AICS_Automation_Featured_Image_Settings::validate( $image_input );
+		if ( is_wp_error( $image ) ) { $errors[] = $image->get_error_code(); $image = AICS_Automation_Featured_Image_Settings::defaults(); }
+		elseif ( $image['enabled'] && is_wp_error( AICS_Automation_Featured_Image_Settings::resolve_for_run( $image ) ) ) { $errors[] = 'featured_image_configuration_invalid'; }
+		$content['featured_images'] = $image;
 		$schedule = $this->schedule( is_array( $input['schedule_settings'] ?? null ) ? $input['schedule_settings'] : array(), $errors );
 		$rules    = $this->rules( is_array( $input['workflow_rules'] ?? null ) ? $input['workflow_rules'] : array(), $mode, $errors );
 		$publish  = $this->publishing( is_array( $input['publishing_settings'] ?? null ) ? $input['publishing_settings'] : array(), $errors );
@@ -98,7 +103,7 @@ final class AICS_Automation_Profile_Service {
 		return array(
 			'id' => 0, 'profile_slug' => self::SLUG, 'profile_name' => __( 'Default Automation', 'ai-content-studio' ), 'mode' => 'autopilot', 'status' => 'disabled',
 			'business_context' => array( 'business_name'=>'', 'business_description'=>'', 'industry'=>'', 'products_services'=>'', 'target_audience'=>'', 'primary_location'=>'', 'website_purpose'=>'', 'brand_voice'=>'', 'preferred_tone'=>'professional', 'core_topics'=>array(), 'topics_to_avoid'=>array(), 'preferred_cta'=>'', 'prohibited_claims'=>array() ),
-			'content_settings' => array( 'ideas_per_cycle'=>5, 'selected_ideas_per_cycle'=>1, 'default_tone'=>'professional', 'article_length'=>'medium', 'duplicate_lookback_days'=>180, 'include_faq'=>false, 'allow_tables'=>false, 'allow_lists'=>true ),
+			'content_settings' => array( 'ideas_per_cycle'=>5, 'selected_ideas_per_cycle'=>1, 'default_tone'=>'professional', 'article_length'=>'medium', 'duplicate_lookback_days'=>180, 'include_faq'=>false, 'allow_tables'=>false, 'allow_lists'=>true, 'featured_images'=>AICS_Automation_Featured_Image_Settings::defaults() ),
 			'schedule_settings' => array( 'frequency'=>'weekly', 'interval'=>1, 'days_of_week'=>array( 'monday' ), 'publish_time'=>'10:00', 'posts_per_period'=>1, 'start_date'=>'', 'end_date'=>'', 'monthly_day'=>(int)current_datetime()->format('j') ),
 			'workflow_rules' => array( 'require_idea_approval'=>false, 'require_article_approval'=>false, 'require_publish_approval'=>false ),
 			'publishing_settings' => array( 'publishing_mode'=>'draft', 'post_status_after_generation'=>'draft', 'category_id'=>$category_id, 'author_id'=>$user_id ),

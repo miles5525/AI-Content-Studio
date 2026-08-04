@@ -26,6 +26,9 @@ final class AICS_Content_Studio_Page {
 	private const SAVE_ARTICLE_NONCE_NAME = 'aics_save_article_nonce';
 	private const CREATE_DRAFT_ACTION = 'aics_create_wordpress_draft';
 	private const CREATE_DRAFT_NONCE_NAME = 'aics_create_wordpress_draft_nonce';
+	private const GENERATE_IMAGE_ACTION = 'aics_generate_manual_featured_image';
+	private const SAVE_IMAGE_ALT_ACTION = 'aics_save_manual_featured_image_alt';
+	private const IMAGE_RESULT_PREFIX = 'aics_manual_image_result_';
 	private const RESET_ACTION = 'aics_reset_content_workflow';
 	private const RESET_NONCE_NAME = 'aics_reset_content_workflow_nonce';
 	private const STATE_TTL = 20 * MINUTE_IN_SECONDS;
@@ -58,6 +61,8 @@ final class AICS_Content_Studio_Page {
 		add_action( 'admin_post_' . self::GENERATE_ARTICLE_ACTION, array( self::class, 'handle_generate_article' ) );
 		add_action( 'admin_post_' . self::SAVE_ARTICLE_ACTION, array( self::class, 'handle_save_article' ) );
 		add_action( 'admin_post_' . self::CREATE_DRAFT_ACTION, array( self::class, 'handle_create_wordpress_draft' ) );
+		add_action( 'admin_post_' . self::GENERATE_IMAGE_ACTION, array( self::class, 'handle_generate_featured_image' ) );
+		add_action( 'admin_post_' . self::SAVE_IMAGE_ALT_ACTION, array( self::class, 'handle_save_featured_image_alt' ) );
 		add_action( 'admin_post_' . self::RESET_ACTION, array( self::class, 'handle_reset_workflow' ) );
 	}
 
@@ -313,6 +318,7 @@ final class AICS_Content_Studio_Page {
 		}
 
 		$engine     = new AICS_AI_Engine();
+		$existing_draft = self::get_article_draft();
 		$started_at = microtime( true );
 		$response   = $engine->generate_article_draft( $inputs, $selected_idea );
 		$duration   = AICS_Usage_Logger::duration_ms( $started_at );
@@ -330,6 +336,9 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'invalid-article-format' );
 		}
 
+		$persistent=(new AICS_Manual_Article_Persistence_Service())->persist_generated($article,get_current_user_id(),absint($existing_draft['article_id']??0));
+		if(empty($persistent['success'])){self::log_usage('ai_request','generate_article_draft','failed','manual-article-persistence-failed',$duration,0,$metadata);self::redirect('manual-article-persistence-failed');}
+
 		self::log_usage( 'ai_request', 'generate_article_draft', 'success', '', $duration, 0, $metadata );
 
 		$timestamp = current_time( 'timestamp', true );
@@ -340,6 +349,9 @@ final class AICS_Content_Studio_Page {
 			array_merge(
 				$article,
 				array(
+					'article_id'    => $persistent['article_id'],
+					'article_uuid'  => $persistent['uuid'],
+					'created_post_id' => absint($persistent['post_id']),
 					'idea_id'      => $selected_idea['id'],
 					'generated_at' => $timestamp,
 					'updated_at'   => $timestamp,
@@ -380,6 +392,8 @@ final class AICS_Content_Studio_Page {
 		if ( is_wp_error( $article ) ) {
 			self::redirect( self::map_article_validation_notice( $article->get_error_code() ) );
 		}
+		$persistent=(new AICS_Manual_Article_Persistence_Service())->update(absint($current_draft['article_id']??0),$article,get_current_user_id());
+		if(empty($persistent['success'])){self::redirect('manual-article-persistence-failed');}
 
 		$updated_draft               = array_merge( $current_draft, $article );
 		$updated_draft['updated_at'] = current_time( 'timestamp', true );
@@ -416,52 +430,44 @@ final class AICS_Content_Studio_Page {
 			self::redirect( 'article-draft-missing' );
 		}
 
-		$had_association = absint( $article_draft['created_post_id'] ?? 0 ) > 0;
 		$existing_post   = self::get_associated_post( $article_draft );
 
 		if ( null !== $existing_post ) {
 			self::redirect( 'wordpress-draft-already-exists' );
 		}
 
-		if ( $had_association ) {
-			self::redirect( 'associated-draft-missing' );
-		}
-
 		$started_at = microtime( true );
-		$generator = new AICS_Post_Generator();
-		$article   = $generator->prepare_generated_article( $article_draft );
-
-		if ( is_wp_error( $article ) ) {
-			self::log_usage( 'post_creation', 'create_wordpress_draft', 'failed', 'invalid-article-draft', AICS_Usage_Logger::duration_ms( $started_at ) );
-			self::redirect( 'invalid-article-draft' );
-		}
-
 		$selected_idea = self::get_selected_idea();
 		$inputs        = self::get_validated_input_state();
 		$context       = array(
-			'idea_id'         => $article_draft['idea_id'],
 			'primary_keyword' => null !== $selected_idea ? $selected_idea['primary_keyword'] : '',
 			'search_intent'   => null !== $selected_idea ? $selected_idea['search_intent'] : '',
 			'tone'            => null !== $inputs ? $inputs['tone'] : $article_draft['tone'],
 			'length'          => null !== $inputs ? $inputs['article_length'] : $article_draft['length'],
 			'generated_at'    => $article_draft['generated_at'],
 		);
-		$result        = $generator->create_wordpress_draft( $article, $context );
+		$result        = (new AICS_Manual_Article_Persistence_Service())->create_or_get_draft(absint($article_draft['article_id']??0),get_current_user_id(),$context);
 		$duration      = AICS_Usage_Logger::duration_ms( $started_at );
 
-		if ( ! $result['success'] ) {
+		if ( empty($result['success']) ) {
 			self::log_usage( 'post_creation', 'create_wordpress_draft', 'failed', $result['code'], $duration );
 			self::redirect( in_array( $result['code'], array( 'invalid-article-draft', 'draft-creation-not-allowed' ), true ) ? $result['code'] : 'wordpress-draft-creation-failed' );
 		}
 
-		self::log_usage( 'post_creation', 'create_wordpress_draft', 'success', '', $duration, absint( $result['post_id'] ), array( 'post_status' => 'draft' ) );
+		if(empty($result['reused'])){self::log_usage( 'post_creation', 'create_wordpress_draft', 'success', '', $duration, absint( $result['post_id'] ), array( 'post_status' => 'draft' ) );}
 
 		$article_draft['created_post_id'] = absint( $result['post_id'] );
 		$article_draft['created_post_at'] = current_time( 'timestamp', true );
 		set_transient( self::get_article_draft_key(), $article_draft, self::ARTICLE_STATE_TTL );
 
-		self::redirect( 'wordpress-draft-created-meta-warning' === $result['code'] ? $result['code'] : 'wordpress-draft-created' );
+		self::redirect(!empty($result['reused'])?'wordpress-draft-already-exists':'wordpress-draft-created');
 	}
+
+	/** Runs the shared image pipeline for the current persistent Manual Studio article. */
+	public static function handle_generate_featured_image():void{self::require_permission();$draft=self::get_article_draft();$id=absint($_POST['article_id']??0);if(!$draft||$id!==absint($draft['article_id'])){self::store_image_result(array('success'=>false,'code'=>'manual_article_not_owned','message'=>__('The Manual Studio article could not be verified.','ai-content-studio')));self::redirect('manual-image-result');}$nonce=isset($_POST['aics_manual_image_nonce'])&&is_string($_POST['aics_manual_image_nonce'])?sanitize_text_field(wp_unslash($_POST['aics_manual_image_nonce'])):'';if(!wp_verify_nonce($nonce,self::GENERATE_IMAGE_ACTION.'_'.$id)){self::store_image_result(array('success'=>false,'code'=>'request_not_verified','message'=>__('The request could not be verified.','ai-content-studio')));self::redirect('manual-image-result');}$result=(new AICS_Manual_Featured_Image_Service())->generate($id,get_current_user_id());self::store_image_result(array('success'=>!empty($result['success']),'code'=>$result['code']??'manual_featured_image_failed','message'=>$result['message']??__('This article featured image requires manual review.','ai-content-studio')));self::redirect('manual-image-result');}
+
+	/** Synchronizes article and attachment alt text without provider work. */
+	public static function handle_save_featured_image_alt():void{self::require_permission();$draft=self::get_article_draft();$id=absint($_POST['article_id']??0);if(!$draft||$id!==absint($draft['article_id'])){self::store_image_result(array('success'=>false,'code'=>'manual_article_not_owned','message'=>__('The Manual Studio article could not be verified.','ai-content-studio')));self::redirect('manual-image-result');}$nonce=isset($_POST['aics_manual_alt_nonce'])&&is_string($_POST['aics_manual_alt_nonce'])?sanitize_text_field(wp_unslash($_POST['aics_manual_alt_nonce'])):'';if(!wp_verify_nonce($nonce,self::SAVE_IMAGE_ALT_ACTION.'_'.$id)){self::store_image_result(array('success'=>false,'code'=>'request_not_verified','message'=>__('The request could not be verified.','ai-content-studio')));self::redirect('manual-image-result');}$alt=isset($_POST['featured_image_alt_text'])&&is_string($_POST['featured_image_alt_text'])?wp_unslash($_POST['featured_image_alt_text']):'';$result=(new AICS_Manual_Featured_Image_Service())->save_alt_text($id,get_current_user_id(),$alt);self::store_image_result(array('success'=>!empty($result['success']),'code'=>$result['code']??'attachment_persistence_failed','message'=>$result['message']??__('Image alt text could not be updated.','ai-content-studio')));self::redirect('manual-image-result');}
 
 	/**
 	 * Clears only the current user's temporary Content Studio workflow.
@@ -663,7 +669,7 @@ final class AICS_Content_Studio_Page {
 	 */
 	private static function get_article_draft(): ?array {
 		$draft = get_transient( self::get_article_draft_key() );
-		$required = array( 'title', 'content', 'excerpt', 'idea_id', 'generated_at', 'updated_at', 'model', 'tone', 'length' );
+		$required = array( 'article_id', 'article_uuid', 'title', 'content', 'excerpt', 'idea_id', 'generated_at', 'updated_at', 'model', 'tone', 'length' );
 
 		if ( ! is_array( $draft ) ) {
 			return null;
@@ -675,11 +681,12 @@ final class AICS_Content_Studio_Page {
 			}
 		}
 
-		foreach ( array( 'title', 'content', 'excerpt', 'idea_id', 'model', 'tone', 'length' ) as $key ) {
+		foreach ( array( 'article_uuid', 'title', 'content', 'excerpt', 'idea_id', 'model', 'tone', 'length' ) as $key ) {
 			if ( ! is_string( $draft[ $key ] ) ) {
 				return null;
 			}
 		}
+		if(absint($draft['article_id'])<1||!wp_is_uuid($draft['article_uuid'],4)){return null;}
 
 		return $draft;
 	}
@@ -702,12 +709,10 @@ final class AICS_Content_Studio_Page {
 
 		$post            = get_post( $post_id );
 		$is_aics_post    = '1' === (string) get_post_meta( $post_id, '_aics_generated_post', true );
+		$is_manual       = 'manual' === (string) get_post_meta( $post_id, '_aics_source', true );
+		$is_article      = absint($article_draft['article_id']??0)===absint(get_post_meta($post_id,'_aics_article_id',true))&&sanitize_text_field((string)($article_draft['article_uuid']??''))===sanitize_text_field((string)get_post_meta($post_id,'_aics_article_uuid',true));
 		$is_same_user    = get_current_user_id() === absint( get_post_meta( $post_id, '_aics_created_by_user', true ) );
-		$is_state_owned  = $post instanceof WP_Post
-			&& isset( $article_draft['created_post_at'] )
-			&& absint( $article_draft['created_post_at'] ) > 0
-			&& get_current_user_id() === (int) $post->post_author;
-		$is_associated   = ( $is_aics_post && $is_same_user ) || $is_state_owned;
+		$is_associated   = $is_aics_post&&$is_manual&&$is_article&&$is_same_user;
 
 		if ( ! $post instanceof WP_Post || 'trash' === get_post_status( $post_id ) || ! $is_associated ) {
 			unset( $article_draft['created_post_id'], $article_draft['created_post_at'] );
@@ -864,6 +869,7 @@ final class AICS_Content_Studio_Page {
 				<?php endif; ?>
 
 				<?php self::render_wordpress_draft_action( $article_draft, $created_post ); ?>
+				<?php self::render_featured_image_section($article_draft); ?>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -908,6 +914,12 @@ final class AICS_Content_Studio_Page {
 		</div>
 		<?php
 	}
+
+	/** Renders preview-safe Manual Studio image state and protected actions. */
+	private static function render_featured_image_section(array $draft):void{$id=absint($draft['article_id']??0);if(!$id){return;}$view=(new AICS_Manual_Featured_Image_Service())->view($id,get_current_user_id());if(empty($view['success'])){return;}$article=$view['article'];$status=$article['featured_image_status'];$attachment=$view['attachment'];?><section class="aics-content-section aics-featured-image-review" aria-labelledby="aics-featured-image-heading"><h3 id="aics-featured-image-heading"><?php esc_html_e('Featured Image','ai-content-studio');?></h3><p><strong><?php esc_html_e('Status:','ai-content-studio');?></strong> <?php echo esc_html(AICS_Featured_Image_State::status_label($status));?></p><?php if(empty($view['post_valid'])):?><p><?php esc_html_e('Create a WordPress draft before generating its featured image.','ai-content-studio');?></p><?php elseif('attached'===$status&&is_array($attachment)):?><div class="aics-featured-image-preview"><img src="<?php echo esc_url($attachment['url']);?>" alt="<?php echo esc_attr($attachment['alt']);?>"><p><?php echo esc_html(sprintf(__('Attachment %1$d · %2$d × %3$d · %4$s','ai-content-studio'),$attachment['id'],$attachment['width'],$attachment['height'],strtoupper(str_replace('image/','',$attachment['mime']))));?></p></div><?php self::render_alt_form($id,$attachment);self::render_image_links($article,$attachment['id']);?><?php elseif('uploaded'===$status):?><p><?php esc_html_e('The image was uploaded but has not yet been assigned to the post.','ai-content-studio');?></p><?php self::render_image_action($id,__('Retry Assignment','ai-content-studio'));if(is_array($attachment)){self::render_alt_form($id,$attachment);}?><?php elseif(in_array($status,array('pending','generating'),true)):?><p><?php echo esc_html(sprintf(__('Image generation is currently %s.','ai-content-studio'),strtolower(AICS_Featured_Image_State::status_label($status))));?></p><?php elseif('skipped'===$status):?><p><?php esc_html_e('Featured-image generation was skipped for this article.','ai-content-studio');?></p><?php elseif(in_array($status,array('retrying','failed','needs_attention'),true)):?><p><?php echo esc_html(AICS_Featured_Image_State::error_label($article['featured_image_last_error_code']??''));?></p><?php if(!empty($article['featured_image_last_error_code'])):?><p><code><?php echo esc_html(sanitize_key($article['featured_image_last_error_code']));?></code></p><?php endif;?><?php if('featured_image_ownership_conflict'!==($article['featured_image_last_error_code']??'')&&(!empty($view['provider_ready'])||is_array($attachment))):self::render_image_action($id,__('Retry Featured Image','ai-content-studio'));endif;if(is_array($attachment)){self::render_alt_form($id,$attachment);}?><?php else:?><p><?php esc_html_e('No featured image has been generated.','ai-content-studio');?></p><?php if(!empty($view['provider_ready'])):self::render_image_action($id,__('Generate Featured Image','ai-content-studio'));else:?><p><?php esc_html_e('Configure the image provider in Settings before generating an image.','ai-content-studio');?></p><?php endif;?><?php endif;?></section><?php }
+	private static function render_image_action(int $id,string $label):void{?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php'));?>" data-aics-generating-label="<?php echo esc_attr__('Generating…','ai-content-studio');?>"><input type="hidden" name="action" value="<?php echo esc_attr(self::GENERATE_IMAGE_ACTION);?>"><input type="hidden" name="article_id" value="<?php echo esc_attr((string)$id);?>"><?php wp_nonce_field(self::GENERATE_IMAGE_ACTION.'_'.$id,'aics_manual_image_nonce');?><?php submit_button($label,'secondary','submit',false);?></form><?php }
+	private static function render_alt_form(int $id,array $attachment):void{?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php'));?>"><input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_IMAGE_ALT_ACTION);?>"><input type="hidden" name="article_id" value="<?php echo esc_attr((string)$id);?>"><?php wp_nonce_field(self::SAVE_IMAGE_ALT_ACTION.'_'.$id,'aics_manual_alt_nonce');?><p><label for="aics-featured-alt-<?php echo esc_attr((string)$id);?>"><strong><?php esc_html_e('Alt text','ai-content-studio');?></strong></label><br><input id="aics-featured-alt-<?php echo esc_attr((string)$id);?>" class="regular-text" type="text" maxlength="250" name="featured_image_alt_text" value="<?php echo esc_attr($attachment['alt']);?>"></p><?php submit_button(__('Save Alt Text','ai-content-studio'),'secondary','submit',false);?></form><?php }
+	private static function render_image_links(array $article,int $attachment):void{$post=absint($article['wordpress_post_id']);$post_link=current_user_can('edit_post',$post)?get_edit_post_link($post,''):'';$media_link=current_user_can('edit_post',$attachment)?get_edit_post_link($attachment,''):'';if(!$post_link&&!$media_link){return;}?><p><?php if($post_link):?><a href="<?php echo esc_url($post_link);?>"><?php esc_html_e('Edit Post','ai-content-studio');?></a><?php endif;?><?php if($post_link&&$media_link):?> | <?php endif;?><?php if($media_link):?><a href="<?php echo esc_url($media_link);?>"><?php esc_html_e('Edit Media','ai-content-studio');?></a><?php endif;?></p><?php }
 
 	/**
 	 * Verifies a dedicated scalar nonce value.
@@ -969,6 +981,7 @@ final class AICS_Content_Studio_Page {
 	 */
 	private static function render_notice(): void {
 		$notice = isset( $_GET['aics_notice'] ) && is_string( $_GET['aics_notice'] ) ? sanitize_key( wp_unslash( $_GET['aics_notice'] ) ) : '';
+		if('manual-image-result'===$notice){self::render_image_result_notice();return;}
 		$notices = array(
 			'business-context-required' => array( 'error', __( 'Business context is required.', 'ai-content-studio' ) ),
 			'business-context-too-long' => array( 'error', __( 'Business context is too long.', 'ai-content-studio' ) ),
@@ -1001,6 +1014,7 @@ final class AICS_Content_Studio_Page {
 			'article-excerpt-too-long'   => array( 'error', __( 'Article excerpt is too long.', 'ai-content-studio' ) ),
 			'article-content-required'   => array( 'error', __( 'Article content is required.', 'ai-content-studio' ) ),
 			'article-content-too-large'  => array( 'error', __( 'Article content is too large.', 'ai-content-studio' ) ),
+			'manual-article-persistence-failed' => array( 'error', __( 'The generated article could not be saved to shared article storage. The previous article was preserved.', 'ai-content-studio' ) ),
 			'wordpress-draft-created'    => array( 'success', __( 'WordPress draft created successfully.', 'ai-content-studio' ) ),
 			'wordpress-draft-created-meta-warning' => array( 'warning', __( 'The WordPress draft was created, but some association metadata could not be saved.', 'ai-content-studio' ) ),
 			'wordpress-draft-already-exists' => array( 'warning', __( 'A WordPress draft already exists for this article.', 'ai-content-studio' ) ),
@@ -1021,6 +1035,8 @@ final class AICS_Content_Studio_Page {
 		<div class="notice notice-<?php echo esc_attr( $notices[ $notice ][0] ); ?> is-dismissible"><p><?php echo esc_html( $notices[ $notice ][1] ); ?></p></div>
 		<?php
 	}
+	private static function store_image_result(array $result):void{set_transient(self::IMAGE_RESULT_PREFIX.get_current_user_id(),array('success'=>!empty($result['success']),'code'=>sanitize_key((string)($result['code']??'')),'message'=>sanitize_text_field((string)($result['message']??''))),2*MINUTE_IN_SECONDS);}
+	private static function render_image_result_notice():void{$key=self::IMAGE_RESULT_PREFIX.get_current_user_id();$result=get_transient($key);delete_transient($key);if(!is_array($result)){return;}?><div class="notice notice-<?php echo esc_attr(!empty($result['success'])?'success':'error');?> is-dismissible"><p><?php echo esc_html($result['message']??__('Featured-image operation completed.','ai-content-studio'));?></p><?php if(empty($result['success'])&&!empty($result['code'])):?><p><code><?php echo esc_html($result['code']);?></code></p><?php endif;?></div><?php }
 
 	/**
 	 * Enforces the centralized plugin permission.

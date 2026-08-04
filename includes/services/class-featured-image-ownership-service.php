@@ -24,7 +24,9 @@ final class AICS_Featured_Image_Ownership_Service {
 	public function validate_post( array $article ): array {
 		$post_id=absint($article['wordpress_post_id']??0);$post=$post_id?get_post($post_id):null;
 		if(!$post instanceof WP_Post||'post'!==$post->post_type||'trash'===$post->post_status||!in_array($post->post_status,array('draft','pending','future','publish'),true)){return $this->result(false,'featured_image_post_invalid',0);}
-		if('1'!==(string)get_post_meta($post_id,'_aics_generated_post',true)||absint(get_post_meta($post_id,'_aics_article_id',true))!==absint($article['id']??0)||sanitize_text_field((string)get_post_meta($post_id,'_aics_article_uuid',true))!==sanitize_text_field((string)($article['article_uuid']??''))){return $this->result(false,'featured_image_ownership_conflict',0);}
+		$source=in_array($article['source_type']??'',array('manual','automation'),true)?$article['source_type']:'';
+		if(''===$source||'1'!==(string)get_post_meta($post_id,'_aics_generated_post',true)||$source!==(string)get_post_meta($post_id,'_aics_source',true)||absint(get_post_meta($post_id,'_aics_article_id',true))!==absint($article['id']??0)||sanitize_text_field((string)get_post_meta($post_id,'_aics_article_uuid',true))!==sanitize_text_field((string)($article['article_uuid']??''))){return $this->result(false,'featured_image_ownership_conflict',0);}
+		if('automation'===$source){foreach(array('_aics_idea_id'=>'idea_id','_aics_run_id'=>'run_id','_aics_profile_id'=>'profile_id') as $meta=>$field){$expected=absint($article[$field]??0);if(!$expected||absint(get_post_meta($post_id,$meta,true))!==$expected){return $this->result(false,'featured_image_ownership_incomplete',0);}}}
 		return array('success'=>true,'code'=>'featured_image_post_owned','attachment_id'=>0,'post'=>$post);
 	}
 

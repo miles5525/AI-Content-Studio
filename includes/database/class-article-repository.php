@@ -19,6 +19,26 @@ final class AICS_Article_Repository {
 	private const POST_STATUSES = array( 'draft_created', 'scheduled', 'published' );
 	private const ORDERBY = array( 'id', 'status', 'word_count', 'planned_publish_at', 'generated_at', 'approved_at', 'scheduled_at', 'published_at', 'created_at', 'updated_at' );
 
+	/** Creates one persistent Manual Studio article without automation parents. */
+	public function create_manual_article( array $article_data, $created_by ): array {
+		global $wpdb;$user=self::nonnegative($created_by);if(null===$user||0===$user){return self::result(false,0,'','invalid_created_by');}
+		$title=trim(sanitize_text_field((string)($article_data['title']??'')));$excerpt=trim(sanitize_textarea_field((string)($article_data['excerpt']??'')));$content=is_string($article_data['content']??null)?trim((string)$article_data['content']):'';
+		if(''===$title||''===$excerpt||''===trim(wp_strip_all_tags($content))||self::length($title)>250||self::length($excerpt)>500||self::length($content)>100000){return self::result(false,0,'','invalid_manual_article');}
+		$uuid=wp_generate_uuid4();if(!is_string($uuid)||!wp_is_uuid($uuid,4)){return self::result(false,0,'','uuid_generation_failed');}
+		$now=self::now();$text=trim(preg_replace('/\s+/u',' ',html_entity_decode(wp_strip_all_tags($content),ENT_QUOTES|ENT_HTML5,get_bloginfo('charset')?:'UTF-8'))??'');$words=''===$text?0:count(preg_split('/\s+/u',$text,-1,PREG_SPLIT_NO_EMPTY)?:array());$hash=hash('sha256',self::normalize_hash_part($title).'|'.self::normalize_hash_part($excerpt).'|'.$content);
+		$row=array('article_uuid'=>$uuid,'idea_id'=>null,'profile_id'=>null,'run_id'=>null,'source_type'=>'manual','title'=>$title,'excerpt'=>$excerpt,'content'=>$content,'content_hash'=>$hash,'word_count'=>$words,'status'=>'generated','wordpress_post_id'=>null,'generation_attempts'=>1,'last_generation_at'=>$now,'generated_at'=>$now,'featured_image_required'=>0,'featured_image_status'=>'not_requested','featured_image_attachment_id'=>null,'featured_image_attempts'=>0,'created_by'=>$user,'updated_by'=>$user,'created_at'=>$now,'updated_at'=>$now);
+		$inserted=$wpdb->insert($this->table(),$row,$this->formats($row));return false===$inserted?self::result(false,0,'','database_insert_failed'):self::result(true,(int)$wpdb->insert_id,$uuid,'manual_article_created');
+	}
+
+	/** Updates editable fields on the same owned Manual Studio article. */
+	public function update_manual_article( $article_id, array $article_data, $updated_by ): array {
+		global $wpdb;$id=absint($article_id);$user=self::nonnegative($updated_by);$article=$this->get_by_id($id);if(!$article){return self::simple(false,0,'article_not_found');}if('manual'!==$article['source_type']||null===$user||0===$user||$article['created_by']!==$user){return self::simple(false,$id,'manual_article_not_owned');}if(!in_array($article['status'],array('generated','draft_created'),true)){return self::simple(false,$id,'manual_article_update_conflict');}
+		$title=trim(sanitize_text_field((string)($article_data['title']??'')));$excerpt=trim(sanitize_textarea_field((string)($article_data['excerpt']??'')));$content=is_string($article_data['content']??null)?trim((string)$article_data['content']):'';if(''===$title||''===$excerpt||''===trim(wp_strip_all_tags($content))||self::length($title)>250||self::length($excerpt)>500||self::length($content)>100000){return self::simple(false,$id,'invalid_manual_article');}
+		$text=trim(preg_replace('/\s+/u',' ',html_entity_decode(wp_strip_all_tags($content),ENT_QUOTES|ENT_HTML5,get_bloginfo('charset')?:'UTF-8'))??'');$words=''===$text?0:count(preg_split('/\s+/u',$text,-1,PREG_SPLIT_NO_EMPTY)?:array());$hash=hash('sha256',self::normalize_hash_part($title).'|'.self::normalize_hash_part($excerpt).'|'.$content);$now=self::now();
+		$changed=$wpdb->query($wpdb->prepare("UPDATE {$this->table()} SET title=%s,excerpt=%s,content=%s,content_hash=%s,word_count=%d,updated_by=%d,updated_at=%s WHERE id=%d AND source_type='manual' AND created_by=%d AND status IN ('generated','draft_created')",$title,$excerpt,$content,$hash,$words,$user,$now,$id,$user));
+		return false===$changed?self::simple(false,$id,'database_update_failed'):(0===$changed&&!$this->get_by_id($id)?self::simple(false,$id,'article_not_found'):self::simple(true,$id,'manual_article_updated'));
+	}
+
 	/** Creates or safely returns the one article belonging to an idea. */
 	public function create_for_idea( $idea_id, array $context = array() ): array {
 		global $wpdb;
@@ -51,6 +71,8 @@ final class AICS_Article_Repository {
 			return self::result( false, 0, '', 'invalid_created_by' );
 		}
 		$source = in_array( $idea['source_type'], self::SOURCES, true ) ? $idea['source_type'] : 'automation';
+		$image = AICS_Automation_Featured_Image_Settings::validate( is_array( $context['featured_image_settings'] ?? null ) ? $context['featured_image_settings'] : array() );
+		$image = is_wp_error( $image ) ? AICS_Automation_Featured_Image_Settings::defaults() : $image;
 		$now    = self::now();
 		$row    = array(
 			'article_uuid'        => $uuid,
@@ -71,8 +93,8 @@ final class AICS_Article_Repository {
 			'rejected_by'         => 0,
 			'rejection_code'      => '',
 			'last_error_code'     => '',
-			'featured_image_required' => 0,
-			'featured_image_status' => 'not_requested',
+			'featured_image_required' => $image['enabled'] && $image['required'] ? 1 : 0,
+			'featured_image_status' => $image['enabled'] ? 'pending' : 'not_requested',
 			'featured_image_attachment_id' => null,
 			'featured_image_attempts' => 0,
 			'created_by'          => $created_by,
@@ -403,6 +425,13 @@ final class AICS_Article_Repository {
 
 	public function record_featured_image_error( $article_id, $expected_status, $resulting_status, $controlled_error_code ): array {$code=is_scalar($controlled_error_code)?sanitize_key((string)$controlled_error_code):'';if(!AICS_Featured_Image_State::is_error_supported($code)){return self::simple(false,absint($article_id),'invalid_featured_image_error_code');}return $this->atomic_transition_featured_image_status($article_id,$expected_status,$resulting_status,array('featured_image_last_error_code'=>$code));}
 
+	/** Synchronizes bounded alt text without changing either article lifecycle. */
+	public function update_featured_image_alt_text( $article_id, $attachment_id, $alt_text, $updated_by ): array {
+		global $wpdb;$id=absint($article_id);$attachment=absint($attachment_id);$user=self::nonnegative($updated_by);$alt=self::nullable_text($alt_text,250);if(!$id||!$attachment||null===$user||0===$user||null===$alt||''===$alt){return self::simple(false,$id,'invalid_featured_image_metadata');}
+		$changed=$wpdb->query($wpdb->prepare("UPDATE {$this->table()} SET featured_image_alt_text=%s,updated_by=%d,updated_at=%s WHERE id=%d AND source_type='manual' AND created_by=%d AND featured_image_attachment_id=%d AND featured_image_status IN ('uploaded','attached','retrying')",$alt,$user,self::now(),$id,$user,$attachment));
+		if(false===$changed){return self::simple(false,$id,'database_update_failed');}$fresh=$this->get_by_id($id);return $fresh&&$fresh['featured_image_attachment_id']===$attachment&&$fresh['featured_image_alt_text']===$alt?self::simple(true,$id,'featured_image_alt_text_updated'):self::simple(false,$id,'featured_image_state_changed');
+	}
+
 	public function table_exists(): bool {
 		global $wpdb;
 		$table = $this->table();
@@ -444,7 +473,8 @@ final class AICS_Article_Repository {
 
 	private function normalize_row( $row ): ?array {
 		if ( ! is_array( $row ) ) { return null; }
-		foreach ( array( 'id', 'idea_id', 'profile_id', 'run_id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by', 'featured_image_required', 'featured_image_attempts' ) as $field ) { $row[ $field ] = absint( $row[ $field ] ?? 0 ); }
+		foreach ( array( 'id', 'word_count', 'generation_attempts', 'approved_by', 'rejected_by', 'created_by', 'updated_by', 'featured_image_required', 'featured_image_attempts' ) as $field ) { $row[ $field ] = absint( $row[ $field ] ?? 0 ); }
+		foreach(array('idea_id','profile_id','run_id') as $field){$row[$field]=null===$row[$field]?null:absint($row[$field]);}
 		$row['wordpress_post_id'] = absint( $row['wordpress_post_id'] ?? 0 );
 		$row['featured_image_attachment_id'] = absint( $row['featured_image_attachment_id'] ?? 0 );
 		$row['featured_image_status'] = AICS_Featured_Image_State::normalize( $row['featured_image_status'] ?? '' );

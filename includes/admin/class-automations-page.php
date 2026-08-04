@@ -33,6 +33,7 @@ final class AICS_Automations_Page {
 				<?php self::render_general( $profile ); ?>
 				<?php self::render_business( $profile['business_context'] ); ?>
 				<?php self::render_content( $profile['content_settings'] ); ?>
+				<?php self::render_featured_images( $profile['content_settings']['featured_images'] ?? array() ); ?>
 				<?php self::render_schedule( $profile['schedule_settings'] ); ?>
 				<?php self::render_approvals( $profile['workflow_rules'], $profile['mode'] ); ?>
 				<?php self::render_publishing( $profile['publishing_settings'] ); ?>
@@ -56,12 +57,13 @@ final class AICS_Automations_Page {
 
 	private static function render_summary( array $profile ): void {
 		$exists=$profile['id']>0; $active='active'===$profile['status']; $modes=array('autopilot'=>__('Autopilot','ai-content-studio'),'approval'=>__('Approval Workflow','ai-content-studio'),'manual'=>__('Manual','ai-content-studio'));
-		$run_repo=new AICS_Automation_Run_Repository();$pending_ideas=(new AICS_Content_Idea_Repository())->count_ideas(array('status'=>'pending_approval'));$pending_articles=(new AICS_Article_Repository())->count_articles(array('status'=>'pending_approval'));$publishing_approvals=$run_repo->count_runs(array('status'=>'queued','current_step'=>'waiting_publish_approval'));$runs_attention=$run_repo->count_runs(array('needs_attention'=>true));
+		$run_repo=new AICS_Automation_Run_Repository();$pending_ideas=(new AICS_Content_Idea_Repository())->count_ideas(array('status'=>'pending_approval'));$pending_articles=(new AICS_Article_Repository())->count_articles(array('status'=>'pending_approval'));$publishing_approvals=$run_repo->count_runs(array('status'=>'queued','current_step'=>'waiting_publish_approval'));$runs_attention=$run_repo->count_runs(array('needs_attention'=>true));$image=AICS_Automation_Featured_Image_Settings::normalize_stored($profile['content_settings']['featured_images']??array());$image_summary=$image['enabled']?sprintf(__('Enabled · %1$s · %2$s','ai-content-studio'),$image['required']?__('Required','ai-content-studio'):__('Optional','ai-content-studio'),ucfirst($image['aspect_ratio'])):__('Disabled','ai-content-studio');
 		?>
 		<section class="aics-card aics-automation-summary" aria-labelledby="aics-automation-summary-heading"><div class="aics-card-header"><h2 id="aics-automation-summary-heading"><?php esc_html_e('Automation Status','ai-content-studio');?></h2></div><div class="aics-card-body"><div class="aics-automation-summary-grid">
 			<div><span><?php esc_html_e('Configuration','ai-content-studio');?></span><strong><?php echo esc_html($exists?__('Saved','ai-content-studio'):__('Not saved yet','ai-content-studio'));?></strong></div>
 			<div><span><?php esc_html_e('Operating mode','ai-content-studio');?></span><strong><?php echo esc_html($modes[$profile['mode']]??__('Autopilot','ai-content-studio'));?></strong></div>
 			<div><span><?php esc_html_e('Automation','ai-content-studio');?></span><strong><span class="aics-status-badge <?php echo $active?'aics-status--success':'aics-history-status--private';?>"><?php echo esc_html($active?__('Enabled','ai-content-studio'):__('Disabled','ai-content-studio'));?></span></strong></div>
+			<div><span><?php esc_html_e('Featured images','ai-content-studio');?></span><strong><?php echo esc_html($image_summary);?></strong></div>
 			<div><span><?php esc_html_e('Last run','ai-content-studio');?></span><strong><?php echo esc_html(self::display_datetime($profile['last_run_at']??null,__('—','ai-content-studio')));?></strong></div>
 			<div><span><?php esc_html_e('Next run','ai-content-studio');?></span><strong><?php echo esc_html(self::display_datetime($profile['next_run_at']??null,$active?__('No future run available','ai-content-studio'):__('Not scheduled while automation is disabled','ai-content-studio')));?></strong></div>
 			<div><span><?php esc_html_e('Last error','ai-content-studio');?></span><strong><?php echo esc_html(''!==($profile['last_error_code']??'')?$profile['last_error_code']:__('None','ai-content-studio'));?></strong></div>
@@ -102,6 +104,26 @@ final class AICS_Automations_Page {
 		<div class="aics-field aics-field--full"><span class="aics-field-label"><?php esc_html_e('Article Features','ai-content-studio');?></span><div class="aics-checkbox-grid"><?php self::checkbox('content_settings[include_faq]',__('Include FAQ Section','ai-content-studio'),$c['include_faq']??false); self::checkbox('content_settings[allow_tables]',__('Allow Tables','ai-content-studio'),$c['allow_tables']??false); self::checkbox('content_settings[allow_lists]',__('Allow Lists','ai-content-studio'),$c['allow_lists']??false);?></div></div>
 		</div></section><?php }
 
+	private static function render_featured_images(array $saved):void{
+		$image=AICS_Automation_Featured_Image_Settings::normalize_stored($saved);$global=AICS_Featured_Image_Settings::get_effective();$display=$image;
+		foreach(array('provider','model') as $key){if(''===$display[$key]){$display[$key]=$global[$key]??'';}}
+		$providers=AICS_Image_Provider_Factory::provider_options();$adapter=AICS_Image_Provider_Factory::create($display['provider']);$cap=is_wp_error($adapter)?array():$adapter->get_capabilities();$global_adapter=AICS_Image_Provider_Factory::create($global['provider']);$ready=is_wp_error($global_adapter)?array('success'=>false):$global_adapter->validate_configuration();
+		?>
+		<section class="aics-section" aria-labelledby="aics-featured-images-heading"><h2 id="aics-featured-images-heading"><?php esc_html_e('Featured Images','ai-content-studio');?></h2><p class="description"><?php esc_html_e('Generate a relevant featured image for every automated article. Global settings are copied into each automation cycle when it starts.','ai-content-studio');?></p><div class="aics-form-grid">
+		<div class="aics-field aics-field--full"><label class="aics-checkbox-option"><input type="checkbox" name="featured_image_settings[enabled]" value="1" <?php checked($image['enabled']);?>> <span><strong><?php esc_html_e('Generate featured images for automated articles','ai-content-studio');?></strong></span></label></div>
+		<?php self::select_field('featured_image_settings[required]',__('Image Requirement','ai-content-studio'),$image['required']?'1':'0',array('0'=>__('Optional — continue the workflow when image generation cannot be completed','ai-content-studio'),'1'=>__('Required — the article must have a valid featured image before delivery','ai-content-studio')));?>
+		<?php self::select_field('featured_image_settings[settings_source]',__('Settings','ai-content-studio'),$image['settings_source'],array('global'=>__('Use global Featured Image settings','ai-content-studio'),'override'=>__('Customize for this automation','ai-content-studio')));?>
+		<div class="aics-field aics-field--full aics-global-image-summary"><strong><?php esc_html_e('Global configuration','ai-content-studio');?></strong><p><?php echo esc_html(sprintf(__('Provider: %1$s · Model: %2$s · Style: %3$s · Aspect ratio: %4$s · Quality: %5$s · Format: %6$s','ai-content-studio'),AICS_Automation_Featured_Image_Settings::provider_label($global['provider']),$global['model'],ucwords(str_replace('-',' ',$global['visual_style'])),ucfirst($global['aspect_ratio']),ucfirst($global['quality']),strtoupper($global['output_format'])));?></p><?php if(empty($ready['success'])):?><div class="notice notice-warning inline"><p><?php esc_html_e('The global image provider configuration is incomplete. Configure it in Settings before enabling this automation.','ai-content-studio');?></p></div><?php endif;?></div>
+		<div class="aics-featured-image-overrides aics-field--full"><div class="aics-form-grid">
+		<?php self::select_field('featured_image_settings[provider]',__('Image Provider','ai-content-studio'),$display['provider'],$providers);?>
+		<?php self::select_field('featured_image_settings[model]',__('Image Model','ai-content-studio'),$display['model'],array_combine($cap['supported_models']??array(),$cap['supported_models']??array())?:array());?>
+		<?php self::select_field('featured_image_settings[visual_style]',__('Visual Style','ai-content-studio'),$image['visual_style'],array('editorial'=>__('Editorial','ai-content-studio'),'photorealistic'=>__('Photorealistic','ai-content-studio'),'modern_illustration'=>__('Modern Illustration','ai-content-studio'),'minimal_3d'=>__('Minimal 3D','ai-content-studio'),'flat_illustration'=>__('Flat Illustration','ai-content-studio')));?>
+		<?php self::select_field('featured_image_settings[aspect_ratio]',__('Aspect Ratio','ai-content-studio'),$image['aspect_ratio'],array('landscape'=>__('Landscape','ai-content-studio'),'square'=>__('Square','ai-content-studio'),'portrait'=>__('Portrait','ai-content-studio')));?>
+		<?php self::select_field('featured_image_settings[quality]',__('Quality','ai-content-studio'),$image['quality'],array('standard'=>__('Standard','ai-content-studio'),'high'=>__('High','ai-content-studio')));?>
+		<?php self::select_field('featured_image_settings[output_format]',__('Output Format','ai-content-studio'),$image['output_format'],array('png'=>'PNG','jpeg'=>'JPEG','webp'=>'WebP'));?>
+		</div></div></div><p class="description"><?php esc_html_e('Required images must be created successfully before the post can be delivered. Worker enforcement will be added in the next feature step.','ai-content-studio');?></p></section><?php
+	}
+
 	private static function render_schedule(array $s):void{?>
 		<section class="aics-section" aria-labelledby="aics-schedule-heading"><h2 id="aics-schedule-heading"><?php esc_html_e('Publishing Schedule','ai-content-studio');?></h2><p class="description"><?php esc_html_e('These values are stored for the future scheduler; no next-run date is calculated in this task.','ai-content-studio');?></p><div class="aics-form-grid">
 		<?php self::select_field('schedule_settings[frequency]',__('Frequency','ai-content-studio'),$s['frequency']??'weekly',array('daily'=>__('Daily','ai-content-studio'),'weekly'=>__('Weekly','ai-content-studio'),'monthly'=>__('Monthly','ai-content-studio'))); self::number_field('schedule_settings[interval]',__('Interval','ai-content-studio'),$s['interval']??1,1,31); self::number_field('schedule_settings[posts_per_period]',__('Posts Per Period','ai-content-studio'),$s['posts_per_period']??1,1,31);?>
@@ -121,7 +143,7 @@ final class AICS_Automations_Page {
 		<div class="aics-field aics-field--full aics-publish-warning"><strong><?php esc_html_e('Automatic publishing caution','ai-content-studio');?></strong><p><?php esc_html_e('Automatic publishing should be used only after the business profile, content rules, and approval requirements have been tested carefully.','ai-content-studio');?></p></div>
 		</div></section><?php }
 
-	private static function request_data():array{$post=wp_unslash($_POST);$array=static fn($k):array=>isset($post[$k])&&is_array($post[$k])?$post[$k]:array();return array('profile_name'=>isset($post['profile_name'])&&is_scalar($post['profile_name'])?(string)$post['profile_name']:'','enabled'=>isset($post['enabled'])?'1':'0','mode'=>isset($post['mode'])&&is_scalar($post['mode'])?(string)$post['mode']:'','business_context'=>$array('business_context'),'content_settings'=>$array('content_settings'),'schedule_settings'=>$array('schedule_settings'),'workflow_rules'=>$array('workflow_rules'),'publishing_settings'=>$array('publishing_settings'));}
+	private static function request_data():array{$post=wp_unslash($_POST);$array=static fn($k):array=>isset($post[$k])&&is_array($post[$k])?$post[$k]:array();return array('profile_name'=>isset($post['profile_name'])&&is_scalar($post['profile_name'])?(string)$post['profile_name']:'','enabled'=>isset($post['enabled'])?'1':'0','mode'=>isset($post['mode'])&&is_scalar($post['mode'])?(string)$post['mode']:'','business_context'=>$array('business_context'),'content_settings'=>$array('content_settings'),'featured_image_settings'=>$array('featured_image_settings'),'schedule_settings'=>$array('schedule_settings'),'workflow_rules'=>$array('workflow_rules'),'publishing_settings'=>$array('publishing_settings'));}
 	private static function require_permission():void{if(!is_user_logged_in()||!current_user_can(\AIContentStudio\Core\Permissions::manage())){wp_die(esc_html__('You are not allowed to manage automation.','ai-content-studio'));}}
 	private static function redirect(string $notice):void{wp_safe_redirect(add_query_arg('aics_notice',sanitize_key($notice),admin_url('admin.php?page='.self::PAGE_SLUG)));exit;}
 	private static function state_key():string{return 'aics_automation_errors_'.get_current_user_id();}
@@ -145,7 +167,15 @@ final class AICS_Automations_Page {
 			'invalid_content_settings' => array( 'error', __( 'The content settings contain invalid values.', 'ai-content-studio' ) ),
 			'invalid_schedule_settings' => array( 'error', __( 'The schedule settings contain invalid values.', 'ai-content-studio' ) ),
 			'invalid_publishing_settings' => array( 'error', __( 'The publishing settings contain invalid values.', 'ai-content-studio' ) ),
-			'invalid_monthly_day' => array( 'error', __( 'The monthly publishing day is invalid.', 'ai-content-studio' ) ),
+				'invalid_monthly_day' => array( 'error', __( 'The monthly publishing day is invalid.', 'ai-content-studio' ) ),
+				'invalid_featured_image_settings_source' => array( 'error', __( 'Select a valid featured image settings source.', 'ai-content-studio' ) ),
+				'invalid_featured_image_provider' => array( 'error', __( 'Select a supported image provider.', 'ai-content-studio' ) ),
+				'invalid_featured_image_model' => array( 'error', __( 'Select a supported image model.', 'ai-content-studio' ) ),
+				'invalid_featured_image_visual_style' => array( 'error', __( 'Select a supported visual style.', 'ai-content-studio' ) ),
+				'invalid_featured_image_aspect_ratio' => array( 'error', __( 'Select a supported image aspect ratio.', 'ai-content-studio' ) ),
+				'invalid_featured_image_quality' => array( 'error', __( 'Select a supported image quality.', 'ai-content-studio' ) ),
+				'invalid_featured_image_output_format' => array( 'error', __( 'Select a supported image format.', 'ai-content-studio' ) ),
+				'featured_image_configuration_invalid' => array( 'error', __( 'The featured image provider is not ready. Review the image settings and saved credentials.', 'ai-content-studio' ) ),
 			'automation_saved_next_run' => array( 'success', __( 'Automation settings saved and the next run was calculated.', 'ai-content-studio' ) ),
 			'automation_saved_disabled' => array( 'success', __( 'Automation settings saved. Automation is disabled and no next run is stored.', 'ai-content-studio' ) ),
 			'schedule_has_no_future_run' => array( 'warning', __( 'Automation settings were saved, but no future run exists before the end date.', 'ai-content-studio' ) ),

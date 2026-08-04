@@ -125,17 +125,25 @@
 		var publishingDays = form.querySelector( '[name="schedule_settings[days_of_week][]"]' ).closest( '.aics-field' );
 		var monthlyDay = form.querySelector( '.aics-monthly-day-field' );
 		var warning = form.querySelector( '.aics-publish-warning' );
+		var imageSource = form.querySelector( '[name="featured_image_settings[settings_source]"]' );
+		var imageOverrides = form.querySelector( '.aics-featured-image-overrides' );
+		var globalImageSummary = form.querySelector( '.aics-global-image-summary' );
 
 		function refreshConditionalFields() {
 			approvalSection.hidden = 'approval' !== mode.value;
 			publishingDays.hidden = 'weekly' !== frequency.value;
 			monthlyDay.hidden = 'monthly' !== frequency.value;
 			warning.hidden = 'publish' !== publishingMode.value;
+			if ( imageSource && imageOverrides ) {
+				imageOverrides.hidden = 'override' !== imageSource.value;
+				globalImageSummary.hidden = 'global' !== imageSource.value;
+			}
 		}
 
 		mode.addEventListener( 'change', refreshConditionalFields );
 		frequency.addEventListener( 'change', refreshConditionalFields );
 		publishingMode.addEventListener( 'change', refreshConditionalFields );
+		if ( imageSource ) { imageSource.addEventListener( 'change', refreshConditionalFields ); }
 		refreshConditionalFields();
 
 		form.addEventListener( 'submit', function () {
