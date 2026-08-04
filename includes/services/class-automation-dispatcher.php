@@ -96,6 +96,7 @@ final class AICS_Automation_Dispatcher {
 				}
 				$snapshot_content = $normalized['content_settings'];
 				unset( $snapshot_content['featured_images'] );
+				$seo=AICS_SEO_Configuration::normalize_stored($snapshot_content['seo']??array(),false);unset($snapshot_content['seo']);
 				$snapshot   = array(
 					'snapshot_version'    => 1,
 					'mode'                => $normalized['mode'],
@@ -105,6 +106,7 @@ final class AICS_Automation_Dispatcher {
 					'workflow_rules'      => $normalized['workflow_rules'],
 					'publishing_settings' => $normalized['publishing_settings'],
 					'featured_image_settings' => $image,
+					'seo_settings' => $seo,
 				);
 				$snapshot_json = wp_json_encode( $snapshot );
 				if ( ! is_string( $snapshot_json ) || '' === $snapshot_json ) {

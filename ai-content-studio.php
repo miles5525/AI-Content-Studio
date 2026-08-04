@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'AICS_VERSION', '0.9.0' );
-define( 'AICS_DB_VERSION', '0.11.0' );
+define( 'AICS_DB_VERSION', '0.12.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
 define( 'AICS_PLUGIN_FILE', __FILE__ );
@@ -36,6 +36,13 @@ require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-run-action-re
 require_once AICS_PLUGIN_DIR . 'includes/database/class-content-idea-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-article-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-settings.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-seo-state.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-seo-configuration.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-seo-data.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/interface-seo-adapter.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-native-wordpress-seo-adapter.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-seo-plugin-detector.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-seo-adapter-factory.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-image-generation-request.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-temporary-image-file.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-image-generation-result.php';

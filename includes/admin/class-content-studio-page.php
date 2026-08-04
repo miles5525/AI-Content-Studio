@@ -150,6 +150,8 @@ final class AICS_Content_Studio_Page {
 						</tr>
 					</table>
 				</section>
+				<section class="aics-content-section"><h2><?php esc_html_e('Generation Instructions','ai-content-studio');?></h2><table class="form-table"><tr><th><?php esc_html_e('Idea Instructions','ai-content-studio');?></th><td><textarea class="large-text" rows="3" maxlength="3000" name="idea_instructions"><?php echo esc_textarea($state['idea_instructions']);?></textarea></td></tr><tr><th><?php esc_html_e('Article Instructions','ai-content-studio');?></th><td><textarea class="large-text" rows="3" maxlength="3000" name="article_instructions"><?php echo esc_textarea($state['article_instructions']);?></textarea></td></tr><tr><th><?php esc_html_e('Featured Image Instructions','ai-content-studio');?></th><td><textarea class="large-text" rows="3" maxlength="3000" name="featured_image_instructions"><?php echo esc_textarea($state['featured_image_instructions']);?></textarea></td></tr></table></section>
+				<?php self::render_seo_configuration($state['seo_settings']); ?>
 
 				<?php submit_button( __( 'Continue', 'ai-content-studio' ) ); ?>
 			</form>
@@ -504,12 +506,16 @@ final class AICS_Content_Studio_Page {
 		$topic_keyword    = isset( $_POST['topic_keyword'] ) && is_string( $_POST['topic_keyword'] ) ? wp_unslash( $_POST['topic_keyword'] ) : '';
 		$tone             = isset( $_POST['tone'] ) && is_string( $_POST['tone'] ) ? wp_unslash( $_POST['tone'] ) : '';
 		$article_length   = isset( $_POST['article_length'] ) && is_string( $_POST['article_length'] ) ? wp_unslash( $_POST['article_length'] ) : '';
+		$seo_raw=isset($_POST['seo_settings'])&&is_array($_POST['seo_settings'])?wp_unslash($_POST['seo_settings']):array();$seo=AICS_SEO_Configuration::validate($seo_raw,true);if(is_wp_error($seo)){$seo=AICS_SEO_Configuration::defaults(true);}
+		$instruction=static fn($key):string=>substr(sanitize_textarea_field(isset($_POST[$key])&&is_string($_POST[$key])?wp_unslash($_POST[$key]):''),0,3000);
 
 		return array(
 			'business_context' => trim( sanitize_textarea_field( $business_context ) ),
 			'topic_keyword'    => trim( sanitize_text_field( $topic_keyword ) ),
 			'tone'             => sanitize_key( $tone ),
 			'article_length'   => sanitize_key( $article_length ),
+			'seo_settings'     => $seo,
+			'idea_instructions'=>$instruction('idea_instructions'),'article_instructions'=>$instruction('article_instructions'),'featured_image_instructions'=>$instruction('featured_image_instructions'),
 		);
 	}
 
@@ -568,6 +574,8 @@ final class AICS_Content_Studio_Page {
 			'topic_keyword'    => '',
 			'tone'             => 'professional',
 			'article_length'   => 'medium',
+			'seo_settings'     => AICS_SEO_Configuration::defaults(true),
+			'idea_instructions'=>'','article_instructions'=>'','featured_image_instructions'=>'',
 		);
 		$error_state = get_transient( self::get_error_state_key() );
 
@@ -594,10 +602,15 @@ final class AICS_Content_Studio_Page {
 			'topic_keyword'    => isset( $state['topic_keyword'] ) && is_string( $state['topic_keyword'] ) ? $state['topic_keyword'] : '',
 			'tone'             => isset( $state['tone'] ) && is_string( $state['tone'] ) && array_key_exists( $state['tone'], self::TONES ) ? $state['tone'] : $defaults['tone'],
 			'article_length'   => isset( $state['article_length'] ) && is_string( $state['article_length'] ) && array_key_exists( $state['article_length'], self::ARTICLE_LENGTHS ) ? $state['article_length'] : $defaults['article_length'],
+			'seo_settings'     => AICS_SEO_Configuration::normalize_stored($state['seo_settings']??array(),true),
+			'idea_instructions'=>substr(sanitize_textarea_field((string)($state['idea_instructions']??'')),0,3000),'article_instructions'=>substr(sanitize_textarea_field((string)($state['article_instructions']??'')),0,3000),'featured_image_instructions'=>substr(sanitize_textarea_field((string)($state['featured_image_instructions']??'')),0,3000),
 		);
 
 		return array_merge( $defaults, $normalized );
 	}
+
+	private static function render_seo_configuration(array $s):void{$labels=AICS_SEO_Configuration::target_labels();?><section class="aics-content-section" aria-labelledby="aics-seo-heading"><h2 id="aics-seo-heading"><?php esc_html_e('SEO Configuration','ai-content-studio');?></h2><p><?php esc_html_e('Save these preferences now. SEO metadata generation will be added in the next task; this task does not modify article content.','ai-content-studio');?></p><table class="form-table" role="presentation"><tr><th><label for="aics-seo-instructions"><?php esc_html_e('SEO Instructions','ai-content-studio');?></label></th><td><textarea id="aics-seo-instructions" class="large-text" rows="4" maxlength="3000" name="seo_settings[instructions]"><?php echo esc_textarea($s['instructions']);?></textarea><p class="description"><?php esc_html_e('Add specific SEO requirements for this article, such as target location, keyword preferences, title style, links or audience.','ai-content-studio');?></p></td></tr><tr><th><?php esc_html_e('Target SEO plugin','ai-content-studio');?></th><td><select name="seo_settings[target_plugin]"><?php foreach($labels as $k=>$v):?><option value="<?php echo esc_attr($k);?>" <?php selected($s['target_plugin'],$k);?>><?php echo esc_html($v);?></option><?php endforeach;?></select></td></tr><tr><th><?php esc_html_e('Title options','ai-content-studio');?></th><td><select name="seo_settings[title][use_number]"><?php foreach(array('optional'=>'Optional','required'=>'Required','avoid'=>'Avoid') as $k=>$v):?><option value="<?php echo esc_attr($k);?>" <?php selected($s['title']['use_number'],$k);?>><?php echo esc_html($v);?></option><?php endforeach;?></select> <label><input type="checkbox" name="seo_settings[title][use_power_word]" value="1" <?php checked($s['title']['use_power_word']);?>> <?php esc_html_e('Use a power word where natural','ai-content-studio');?></label> <select name="seo_settings[title][use_sentiment_word]"><?php foreach(array('optional'=>'Sentiment optional','required'=>'Sentiment required','avoid'=>'Avoid sentiment') as $k=>$v):?><option value="<?php echo esc_attr($k);?>" <?php selected($s['title']['use_sentiment_word'],$k);?>><?php echo esc_html($v);?></option><?php endforeach;?></select></td></tr><?php self::render_seo_rules($s,'seo_settings');?></table></section><?php }
+	private static function render_seo_rules(array $s,string $n):void{?><tr><th><?php esc_html_e('Links','ai-content-studio');?></th><td><label><input type="checkbox" name="<?php echo esc_attr($n);?>[links][internal_enabled]" value="1" <?php checked($s['links']['internal_enabled']);?>> <?php esc_html_e('Add internal links','ai-content-studio');?></label> <input type="number" min="0" max="10" name="<?php echo esc_attr($n);?>[links][internal_maximum]" value="<?php echo esc_attr($s['links']['internal_maximum']);?>"> <label><input type="checkbox" name="<?php echo esc_attr($n);?>[links][external_enabled]" value="1" <?php checked($s['links']['external_enabled']);?>> <?php esc_html_e('Add external links','ai-content-studio');?></label> <input type="number" min="0" max="10" name="<?php echo esc_attr($n);?>[links][external_maximum]" value="<?php echo esc_attr($s['links']['external_maximum']);?>"></td></tr><tr><th><?php esc_html_e('Keyword checks','ai-content-studio');?></th><td><input type="number" step="0.1" min="0" max="5" name="<?php echo esc_attr($n);?>[keyword][density_minimum]" value="<?php echo esc_attr($s['keyword']['density_minimum']);?>">–<input type="number" step="0.1" min="0" max="5" name="<?php echo esc_attr($n);?>[keyword][density_maximum]" value="<?php echo esc_attr($s['keyword']['density_maximum']);?>"><?php foreach(array('title','description','slug','introduction','heading','image_alt') as $k):?><label><input type="checkbox" name="<?php echo esc_attr($n);?>[keyword][require_in_<?php echo esc_attr($k);?>]" value="1" <?php checked($s['keyword']['require_in_'.$k]);?>> <?php echo esc_html(ucwords(str_replace('_',' ',$k)));?></label> <?php endforeach;?></td></tr><tr><th><?php esc_html_e('Featured image inside content','ai-content-studio');?></th><td><select name="<?php echo esc_attr($n);?>[content_image][placement]"><?php foreach(array('disabled'=>'Disabled','after_introduction'=>'Insert after introduction','before_first_h2'=>'Insert before first H2','after_first_h2'=>'Insert after first H2 section','middle'=>'Insert near middle') as $k=>$v):?><option value="<?php echo esc_attr($k);?>" <?php selected($s['content_image']['placement'],$k);?>><?php echo esc_html($v);?></option><?php endforeach;?></select><input type="hidden" name="<?php echo esc_attr($n);?>[content_image][enabled]" value="1"></td></tr><?php }
 
 	/**
 	 * Returns the current user's validated, unexpired input state.

@@ -83,6 +83,7 @@ final class AICS_Automation_Profile_Repository {
 			if ( 'content_settings' === $field && is_array( $submitted ) && ! array_key_exists( 'featured_images', $submitted ) ) {
 				$submitted['featured_images'] = $existing['content_settings']['featured_images'] ?? AICS_Automation_Featured_Image_Settings::defaults();
 			}
+			if('content_settings'===$field&&is_array($submitted)&&!array_key_exists('seo',$submitted)){$submitted['seo']=$existing['content_settings']['seo']??AICS_SEO_Configuration::defaults(false);}
 			$value = $this->normalize_field( $field, $submitted );
 			if ( null === $value && in_array( $field, array( 'mode', 'status' ), true ) ) {
 				return self::result( false, 0, 'invalid_profile_data' );
@@ -230,7 +231,7 @@ final class AICS_Automation_Profile_Repository {
 		$ideas = self::integer( $value['ideas_per_cycle'] ?? 5, 1, 20, 5 );
 		$tones = array( 'professional', 'friendly', 'conversational', 'informative', 'persuasive' );
 		$lengths = array( 'short', 'medium', 'long' );
-			return array( 'ideas_per_cycle' => $ideas, 'selected_ideas_per_cycle' => min( $ideas, self::integer( $value['selected_ideas_per_cycle'] ?? 1, 1, 20, 1 ) ), 'default_tone' => in_array( $value['default_tone'] ?? '', $tones, true ) ? $value['default_tone'] : 'professional', 'article_length' => in_array( $value['article_length'] ?? '', $lengths, true ) ? $value['article_length'] : 'medium', 'duplicate_lookback_days' => self::integer( $value['duplicate_lookback_days'] ?? 180, 0, 3650, 180 ), 'include_faq' => self::boolean( $value['include_faq'] ?? false ), 'allow_tables' => self::boolean( $value['allow_tables'] ?? false ), 'allow_lists' => self::boolean( $value['allow_lists'] ?? false ), 'featured_images' => AICS_Automation_Featured_Image_Settings::normalize_stored( $value['featured_images'] ?? array() ) );
+			return array( 'ideas_per_cycle' => $ideas, 'selected_ideas_per_cycle' => min( $ideas, self::integer( $value['selected_ideas_per_cycle'] ?? 1, 1, 20, 1 ) ), 'default_tone' => in_array( $value['default_tone'] ?? '', $tones, true ) ? $value['default_tone'] : 'professional', 'article_length' => in_array( $value['article_length'] ?? '', $lengths, true ) ? $value['article_length'] : 'medium', 'duplicate_lookback_days' => self::integer( $value['duplicate_lookback_days'] ?? 180, 0, 3650, 180 ), 'include_faq' => self::boolean( $value['include_faq'] ?? false ), 'allow_tables' => self::boolean( $value['allow_tables'] ?? false ), 'allow_lists' => self::boolean( $value['allow_lists'] ?? false ), 'idea_instructions'=>self::limit(sanitize_textarea_field((string)($value['idea_instructions']??'')),3000),'article_instructions'=>self::limit(sanitize_textarea_field((string)($value['article_instructions']??'')),3000),'featured_image_instructions'=>self::limit(sanitize_textarea_field((string)($value['featured_image_instructions']??'')),3000), 'featured_images' => AICS_Automation_Featured_Image_Settings::normalize_stored( $value['featured_images'] ?? array() ), 'seo'=>AICS_SEO_Configuration::normalize_stored($value['seo']??array(),false) );
 	}
 	private static function schedule_settings( $value ): array {
 		if ( ! is_array( $value ) ) { return array(); }
@@ -256,6 +257,7 @@ final class AICS_Automation_Profile_Repository {
 		$row['mode'] = in_array( $row['mode'] ?? '', self::MODES, true ) ? $row['mode'] : 'autopilot'; $row['status'] = in_array( $row['status'] ?? '', self::STATUSES, true ) ? $row['status'] : 'disabled';
 			foreach ( self::JSON_FIELDS as $field ) { $row[ $field ] = self::decode( $row[ $field ] ?? '' ); }
 			$row['content_settings']['featured_images'] = AICS_Automation_Featured_Image_Settings::normalize_stored( $row['content_settings']['featured_images'] ?? array() );
+			$row['content_settings']['seo'] = AICS_SEO_Configuration::normalize_stored($row['content_settings']['seo']??array(),false);
 		$row['next_run_at'] = self::datetime( $row['next_run_at'] ?? null ); $row['last_run_at'] = self::datetime( $row['last_run_at'] ?? null ); $row['last_error_code'] = self::error_code( $row['last_error_code'] ?? '' );
 		return $row;
 	}

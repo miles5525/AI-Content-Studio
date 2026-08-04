@@ -425,6 +425,9 @@ final class AICS_Article_Repository {
 
 	public function record_featured_image_error( $article_id, $expected_status, $resulting_status, $controlled_error_code ): array {$code=is_scalar($controlled_error_code)?sanitize_key((string)$controlled_error_code):'';if(!AICS_Featured_Image_State::is_error_supported($code)){return self::simple(false,absint($article_id),'invalid_featured_image_error_code');}return $this->atomic_transition_featured_image_status($article_id,$expected_status,$resulting_status,array('featured_image_last_error_code'=>$code));}
 
+	/** Persists normalized SEO values without accepting raw provider output. */
+	public function update_seo_data($article_id,AICS_SEO_Data $data,string $status='generated',string $target='native'):array{global $wpdb;$id=absint($article_id);if(!$id||!AICS_SEO_State::is_valid($status)||!in_array($target,array('native','yoast','rank_math','aioseo'),true)){return self::simple(false,$id,'invalid_seo_data');}$p=$data->to_persistence_data();$analysis=wp_json_encode(array('checks'=>json_decode($p['analysis_checks'],true)?:array(),'warnings'=>json_decode($p['warnings'],true)?:array(),'title_uses_number'=>$p['title_uses_number'],'title_uses_power_word'=>$p['title_uses_power_word'],'title_uses_sentiment_word'=>$p['title_uses_sentiment_word'],'keyword_density'=>$p['keyword_density'],'keyword_occurrences'=>$p['keyword_occurrences'],'word_count'=>$p['word_count']));$now=self::now();$changed=$wpdb->update($this->table(),array('seo_status'=>$status,'seo_title'=>$p['seo_title'],'seo_meta_description'=>$p['meta_description'],'seo_focus_keyword'=>$p['focus_keyword'],'seo_slug'=>$p['slug'],'seo_categories'=>$p['categories'],'seo_tags'=>$p['tags'],'seo_internal_links'=>$p['internal_links'],'seo_external_links'=>$p['external_links'],'seo_analysis'=>$analysis,'seo_target_plugin'=>$target,'seo_generated_at'=>$status==='generated'?$now:null,'seo_updated_at'=>$now,'seo_last_error_code'=>null),array('id'=>$id),null,array('%d'));return false===$changed?self::simple(false,$id,'database_update_failed'):self::simple(true,$id,'seo_data_updated');}
+
 	/** Synchronizes bounded alt text without changing either article lifecycle. */
 	public function update_featured_image_alt_text( $article_id, $attachment_id, $alt_text, $updated_by ): array {
 		global $wpdb;$id=absint($article_id);$attachment=absint($attachment_id);$user=self::nonnegative($updated_by);$alt=self::nullable_text($alt_text,250);if(!$id||!$attachment||null===$user||0===$user||null===$alt||''===$alt){return self::simple(false,$id,'invalid_featured_image_metadata');}
@@ -478,9 +481,11 @@ final class AICS_Article_Repository {
 		$row['wordpress_post_id'] = absint( $row['wordpress_post_id'] ?? 0 );
 		$row['featured_image_attachment_id'] = absint( $row['featured_image_attachment_id'] ?? 0 );
 		$row['featured_image_status'] = AICS_Featured_Image_State::normalize( $row['featured_image_status'] ?? '' );
+		$row['seo_status'] = AICS_SEO_State::is_valid($row['seo_status']??'')?$row['seo_status']:AICS_SEO_State::NOT_REQUESTED;
+		foreach(array('seo_categories','seo_tags','seo_internal_links','seo_external_links','seo_analysis') as $field){$decoded=json_decode(is_string($row[$field]??null)?$row[$field]:'',true);$row[$field]=is_array($decoded)?$decoded:array();}
 		$row['source_type'] = in_array( $row['source_type'] ?? '', self::SOURCES, true ) ? $row['source_type'] : 'automation';
 		$row['status'] = in_array( $row['status'] ?? '', self::STATUSES, true ) ? $row['status'] : 'needs_attention';
-		foreach ( array( 'planned_publish_at', 'last_generation_at', 'generated_at', 'approved_at', 'rejected_at', 'post_created_at', 'scheduled_at', 'published_at', 'featured_image_generated_at', 'featured_image_uploaded_at', 'featured_image_attached_at', 'created_at', 'updated_at' ) as $field ) { $row[ $field ] = self::datetime( $row[ $field ] ?? null ); }
+		foreach ( array( 'planned_publish_at', 'last_generation_at', 'generated_at', 'approved_at', 'rejected_at', 'post_created_at', 'scheduled_at', 'published_at', 'featured_image_generated_at', 'featured_image_uploaded_at', 'featured_image_attached_at', 'seo_generated_at','seo_applied_at','seo_updated_at','created_at', 'updated_at' ) as $field ) { $row[ $field ] = self::datetime( $row[ $field ] ?? null ); }
 		return $row;
 	}
 

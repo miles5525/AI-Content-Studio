@@ -78,6 +78,8 @@ final class AICS_Automation_Profile_Service {
 		if ( is_wp_error( $image ) ) { $errors[] = $image->get_error_code(); $image = AICS_Automation_Featured_Image_Settings::defaults(); }
 		elseif ( $image['enabled'] && is_wp_error( AICS_Automation_Featured_Image_Settings::resolve_for_run( $image ) ) ) { $errors[] = 'featured_image_configuration_invalid'; }
 		$content['featured_images'] = $image;
+		$seo_input=is_array($input['seo_settings']??null)?$input['seo_settings']:(is_array($input['content_settings']['seo']??null)?$input['content_settings']['seo']:array());
+		$seo=AICS_SEO_Configuration::validate($seo_input,false);if(is_wp_error($seo)){$errors[]=$seo->get_error_code();$seo=AICS_SEO_Configuration::defaults(false);}$content['seo']=$seo;
 		$schedule = $this->schedule( is_array( $input['schedule_settings'] ?? null ) ? $input['schedule_settings'] : array(), $errors );
 		$rules    = $this->rules( is_array( $input['workflow_rules'] ?? null ) ? $input['workflow_rules'] : array(), $mode, $errors );
 		$publish  = $this->publishing( is_array( $input['publishing_settings'] ?? null ) ? $input['publishing_settings'] : array(), $errors );
@@ -103,7 +105,7 @@ final class AICS_Automation_Profile_Service {
 		return array(
 			'id' => 0, 'profile_slug' => self::SLUG, 'profile_name' => __( 'Default Automation', 'ai-content-studio' ), 'mode' => 'autopilot', 'status' => 'disabled',
 			'business_context' => array( 'business_name'=>'', 'business_description'=>'', 'industry'=>'', 'products_services'=>'', 'target_audience'=>'', 'primary_location'=>'', 'website_purpose'=>'', 'brand_voice'=>'', 'preferred_tone'=>'professional', 'core_topics'=>array(), 'topics_to_avoid'=>array(), 'preferred_cta'=>'', 'prohibited_claims'=>array() ),
-			'content_settings' => array( 'ideas_per_cycle'=>5, 'selected_ideas_per_cycle'=>1, 'default_tone'=>'professional', 'article_length'=>'medium', 'duplicate_lookback_days'=>180, 'include_faq'=>false, 'allow_tables'=>false, 'allow_lists'=>true, 'featured_images'=>AICS_Automation_Featured_Image_Settings::defaults() ),
+			'content_settings' => array( 'ideas_per_cycle'=>5, 'selected_ideas_per_cycle'=>1, 'default_tone'=>'professional', 'article_length'=>'medium', 'duplicate_lookback_days'=>180, 'include_faq'=>false, 'allow_tables'=>false, 'allow_lists'=>true, 'idea_instructions'=>'','article_instructions'=>'','featured_image_instructions'=>'','featured_images'=>AICS_Automation_Featured_Image_Settings::defaults(), 'seo'=>AICS_SEO_Configuration::defaults(false) ),
 			'schedule_settings' => array( 'frequency'=>'weekly', 'interval'=>1, 'days_of_week'=>array( 'monday' ), 'publish_time'=>'10:00', 'posts_per_period'=>1, 'start_date'=>'', 'end_date'=>'', 'monthly_day'=>(int)current_datetime()->format('j') ),
 			'workflow_rules' => array( 'require_idea_approval'=>false, 'require_article_approval'=>false, 'require_publish_approval'=>false ),
 			'publishing_settings' => array( 'publishing_mode'=>'draft', 'post_status_after_generation'=>'draft', 'category_id'=>$category_id, 'author_id'=>$user_id ),
@@ -135,7 +137,7 @@ final class AICS_Automation_Profile_Service {
 		if ( $selected > $ideas ) { $errors[] = 'selected_ideas_exceed_generated'; }
 		$tone = self::key( $input['default_tone'] ?? 'professional' ); $length = self::key( $input['article_length'] ?? 'medium' );
 		if ( ! in_array( $tone, self::TONES, true ) || ! in_array( $length, array('short','medium','long'), true ) ) { $errors[] = 'invalid_content_settings'; }
-		return array( 'ideas_per_cycle'=>$ideas, 'selected_ideas_per_cycle'=>min($selected,$ideas), 'default_tone'=>in_array($tone,self::TONES,true)?$tone:'professional', 'article_length'=>in_array($length,array('short','medium','long'),true)?$length:'medium', 'duplicate_lookback_days'=>$lookback, 'include_faq'=>self::boolean($input['include_faq']??false), 'allow_tables'=>self::boolean($input['allow_tables']??false), 'allow_lists'=>self::boolean($input['allow_lists']??false) );
+		return array( 'ideas_per_cycle'=>$ideas, 'selected_ideas_per_cycle'=>min($selected,$ideas), 'default_tone'=>in_array($tone,self::TONES,true)?$tone:'professional', 'article_length'=>in_array($length,array('short','medium','long'),true)?$length:'medium', 'duplicate_lookback_days'=>$lookback, 'include_faq'=>self::boolean($input['include_faq']??false), 'allow_tables'=>self::boolean($input['allow_tables']??false), 'allow_lists'=>self::boolean($input['allow_lists']??false), 'idea_instructions'=>self::cut(self::textarea($input['idea_instructions']??''),3000), 'article_instructions'=>self::cut(self::textarea($input['article_instructions']??''),3000), 'featured_image_instructions'=>self::cut(self::textarea($input['featured_image_instructions']??''),3000) );
 	}
 
 	private function schedule( array $input, array &$errors ): array {

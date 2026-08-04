@@ -34,6 +34,7 @@ final class Installer {
 		'featured_image_status'        => 'featured_image_status',
 		'featured_image_attachment_id' => 'featured_image_attachment_id',
 	);
+	private const SEO_COLUMNS = array( 'seo_status','seo_title','seo_meta_description','seo_focus_keyword','seo_slug','seo_categories','seo_tags','seo_internal_links','seo_external_links','seo_analysis','seo_target_plugin','seo_generated_at','seo_applied_at','seo_updated_at','seo_last_error_code' );
 
 	/**
 	 * Saves installation metadata and installs the current schema.
@@ -239,6 +240,21 @@ final class Installer {
 			featured_image_uploaded_at datetime NULL,
 			featured_image_attached_at datetime NULL,
 			featured_image_last_error_code varchar(100) NULL,
+			seo_status varchar(32) NOT NULL DEFAULT 'not_requested',
+			seo_title varchar(250) NULL,
+			seo_meta_description text NULL,
+			seo_focus_keyword varchar(255) NULL,
+			seo_slug varchar(200) NULL,
+			seo_categories longtext NULL,
+			seo_tags longtext NULL,
+			seo_internal_links longtext NULL,
+			seo_external_links longtext NULL,
+			seo_analysis longtext NULL,
+			seo_target_plugin varchar(32) NULL,
+			seo_generated_at datetime NULL,
+			seo_applied_at datetime NULL,
+			seo_updated_at datetime NULL,
+			seo_last_error_code varchar(100) NULL,
 			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			updated_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_at datetime NOT NULL,
@@ -256,6 +272,7 @@ final class Installer {
 			KEY approved_by (approved_by),
 			KEY featured_image_status (featured_image_status),
 			KEY featured_image_attachment_id (featured_image_attachment_id),
+			KEY seo_status (seo_status),
 			KEY created_at (created_at),
 			KEY updated_at (updated_at)
 		) {$charset_collate};";
@@ -310,12 +327,15 @@ final class Installer {
 		$articles_exists = $articles_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $articles_table ) ) );
 		$featured_schema_exists = $articles_exists && self::featured_image_schema_complete();
 		$manual_schema_exists = $articles_exists && self::manual_article_schema_complete();
+		$seo_schema_exists = $articles_exists && self::seo_schema_complete();
 		$actions_exists  = $actions_table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $actions_table ) ) );
 
-		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $featured_schema_exists && $manual_schema_exists && $actions_exists ) {
+		if ( '' === $usage_error && '' === $profiles_error && '' === $runs_error && '' === $ideas_error && '' === $articles_error && '' === $actions_error && $usage_exists && $profiles_exists && $runs_exists && $snapshot_exists && $ideas_exists && $articles_exists && $featured_schema_exists && $manual_schema_exists && $seo_schema_exists && $actions_exists ) {
 			update_option( 'aics_db_version', AICS_DB_VERSION, false );
 		}
 	}
+
+	private static function seo_schema_complete(): bool { global $wpdb; $table=$wpdb->prefix.'aics_articles'; foreach(self::SEO_COLUMNS as $column){if(null===$wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s",$column))){return false;}} return null!==$wpdb->get_var($wpdb->prepare("SHOW INDEX FROM {$table} WHERE Key_name=%s",'seo_status')); }
 
 	/**
 	 * Confirms that every Task 1.1 column and index exists on the articles table.
