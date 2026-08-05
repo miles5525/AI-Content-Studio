@@ -34,7 +34,7 @@ final class Installer {
 		'featured_image_status'        => 'featured_image_status',
 		'featured_image_attachment_id' => 'featured_image_attachment_id',
 	);
-	private const SEO_COLUMNS = array( 'seo_status','seo_title','seo_meta_description','seo_focus_keyword','seo_slug','seo_categories','seo_tags','seo_internal_links','seo_external_links','seo_analysis','seo_target_plugin','seo_generated_at','seo_applied_at','seo_updated_at','seo_last_error_code' );
+	private const SEO_COLUMNS = array( 'seo_status','seo_title','seo_meta_description','seo_focus_keyword','seo_slug','seo_categories','seo_tags','seo_internal_links','seo_external_links','seo_analysis','seo_target_plugin','seo_generation_attempts','seo_application_attempts','seo_provider','seo_model','seo_adapter','seo_adapter_version','seo_application_report','seo_analyzed_at','seo_approved_at','seo_generated_at','seo_applied_at','seo_updated_at','seo_last_error_code' );
 
 	/**
 	 * Saves installation metadata and installs the current schema.
@@ -251,6 +251,15 @@ final class Installer {
 			seo_external_links longtext NULL,
 			seo_analysis longtext NULL,
 			seo_target_plugin varchar(32) NULL,
+			seo_generation_attempts smallint(5) unsigned NOT NULL DEFAULT 0,
+			seo_application_attempts smallint(5) unsigned NOT NULL DEFAULT 0,
+			seo_provider varchar(64) NULL,
+			seo_model varchar(100) NULL,
+			seo_adapter varchar(32) NULL,
+			seo_adapter_version varchar(64) NULL,
+			seo_application_report longtext NULL,
+			seo_analyzed_at datetime NULL,
+			seo_approved_at datetime NULL,
 			seo_generated_at datetime NULL,
 			seo_applied_at datetime NULL,
 			seo_updated_at datetime NULL,

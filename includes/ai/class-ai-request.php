@@ -30,7 +30,7 @@ final class AICS_AI_Request {
 	 * @throws InvalidArgumentException When required values are invalid.
 	 */
 	public function __construct( string $task_type, string $system_instructions, string $user_prompt, int $max_output_tokens, array $structured_output_schema ) {
-		if ( ! in_array( $task_type, array( 'blog_ideas', 'automation_ideas', 'evaluate_content_ideas', 'article_draft', 'automation_article' ), true ) || '' === trim( $system_instructions ) || '' === trim( $user_prompt ) ) {
+		if ( ! in_array( $task_type, array( 'blog_ideas', 'automation_ideas', 'evaluate_content_ideas', 'article_draft', 'automation_article', 'seo_metadata' ), true ) || '' === trim( $system_instructions ) || '' === trim( $user_prompt ) ) {
 			throw new InvalidArgumentException( 'Invalid AI request input.' );
 		}
 

@@ -1,3 +1,3 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) { exit; }
-final class AICS_SEO_Adapter_Factory {public static function get(string $key='auto'):AICS_SEO_Adapter_Interface{$resolved=(new AICS_SEO_Plugin_Detector())->resolve($key);return new AICS_Native_WordPress_SEO_Adapter();}public static function registered():array{return array('native');}}
+if(!defined('ABSPATH')){exit;}
+final class AICS_SEO_Adapter_Factory{public static function get(string $key='auto'){ $r=(new AICS_SEO_Plugin_Detector())->resolve($key);if(empty($r['available'])){return new WP_Error('seo_target_plugin_unavailable');}$map=array('native'=>AICS_Native_WordPress_SEO_Adapter::class,'yoast'=>AICS_Yoast_SEO_Adapter::class,'rank_math'=>AICS_Rank_Math_SEO_Adapter::class,'aioseo'=>AICS_AIOSEO_Adapter::class);$class=$map[$r['key']]??'';return $class&&class_exists($class)?new $class:new WP_Error('seo_adapter_incompatible');}public static function registered():array{return array('native','yoast','rank_math','aioseo');}}

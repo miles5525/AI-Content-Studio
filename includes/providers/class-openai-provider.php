@@ -80,7 +80,7 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 			return AICS_AI_Response::failure( 'missing-api-key', __( 'No OpenAI API key is configured.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
-		if ( ! in_array( $request->get_task_type(), array( 'blog_ideas', 'automation_ideas', 'evaluate_content_ideas', 'article_draft', 'automation_article' ), true ) ) {
+		if ( ! in_array( $request->get_task_type(), array( 'blog_ideas', 'automation_ideas', 'evaluate_content_ideas', 'article_draft', 'automation_article', 'seo_metadata' ), true ) ) {
 			return AICS_AI_Response::failure( 'unsupported-task', __( 'The requested AI task is not supported.', 'ai-content-studio' ), $this->get_provider_name() );
 		}
 
@@ -105,7 +105,7 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 					),
 				),
 			),
-			in_array( $request->get_task_type(), array( 'article_draft', 'automation_article' ), true ) ? 30 : 15
+			in_array( $request->get_task_type(), array( 'article_draft', 'automation_article', 'seo_metadata' ), true ) ? 30 : 15
 		);
 
 		if ( ! $response['success'] ) {
@@ -117,6 +117,7 @@ final class AICS_OpenAI_Provider implements AICS_Provider_Interface {
 		$structured_data = $this->extract_structured_output( $response['data'] );
 
 		if ( null === $structured_data ) {
+			if('seo_metadata'===$request->get_task_type()){return AICS_AI_Response::failure('invalid_seo_generation_response',__('OpenAI returned an invalid SEO response.','ai-content-studio'),$this->get_provider_name(),$response['status_code']);}
 			$is_article = in_array( $request->get_task_type(), array( 'article_draft', 'automation_article' ), true );
 			$error_code = $is_article ? 'invalid-article-format' : 'invalid-idea-format';
 			$message    = $is_article ? __( 'OpenAI returned an invalid article format.', 'ai-content-studio' ) : __( 'OpenAI returned an invalid idea format.', 'ai-content-studio' );

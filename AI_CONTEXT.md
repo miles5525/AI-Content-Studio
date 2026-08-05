@@ -1129,4 +1129,100 @@ Files created: `includes/services/class-seo-state.php`, `class-seo-configuration
 
 Files modified: `ai-content-studio.php`, `includes/database/class-installer.php`, `includes/database/class-article-repository.php`, `includes/database/class-automation-profile-repository.php`, `includes/database/class-automation-run-repository.php`, `includes/services/class-automation-profile-service.php`, `includes/services/class-automation-dispatcher.php`, `includes/admin/class-content-studio-page.php`, `includes/admin/class-automations-page.php`, `includes/admin/class-automation-runs-page.php`, and `AI_CONTEXT.md`.
 
+## V1 Task 2.2 — AI SEO Metadata Generation and Deterministic Quality Analysis
+
+Task 2.1 is complete and tested at schema version `0.12.0`. Task 2.2 implements shared provider-neutral SEO generation, deterministic analysis, and Manual Studio generation/editing. Automation SEO generation, plugin-specific metadata application, link insertion, and in-content image insertion remain unimplemented.
+
+`AICS_SEO_Generation_Request` contains only the persistent article ID/title/excerpt/bounded sanitized content, locale, public site context, controlled target, bounded SEO Instructions, SEO rules, and existing image description. `AICS_SEO_Generation_Result` exposes normalized results only. Neither contains credentials, headers, nonces, cookies, request globals, lock tokens, or paths.
+
+`AICS_SEO_Prompt_Builder` uses the existing `AICS_AI_Request` with task `seo_metadata`, strict JSON Schema, and a bounded 1,800-token response. It requests exactly focus keyword, title, description, slug, excerpt, categories, tags, and image alt text as JSON without Markdown. It forbids ranking promises and treats SEO Instructions as user preferences that cannot override security, accuracy, structure, or limits. SEO Instructions are used only in this SEO stage.
+
+The existing provider interface, request/response objects, and OpenAI provider now allow `seo_metadata`. Provider JSON-schema parsing retains the single-fence recovery. The SEO service then requires exact top-level keys, controlled types, no markup, nonempty core fields, bounded/deduplicated arrays and strings, a URL-free focus phrase, and a `sanitize_title()` slug. Raw malformed output is never stored or shown.
+
+`AICS_SEO_Recommendation_Profile` centralizes conservative native, Yoast, Rank Math, and AIOSEO title/meta/slug guidance and notes that plugin width/score calculations may differ. Auto mode uses the Task 2.1 detector and native fallback.
+
+`AICS_SEO_Quality_Analyzer` deterministically checks core metadata; recommendation lengths; focus phrase placement in title, description, slug, first 150 visible words, H2/H3, and image alt; whole-phrase occurrences and density; numeric, power, and sentiment title rules; existing internal/external links; featured image and alt availability; word count; excerpt; and suggested terms. Density is occurrences divided by visible word count times 100, rounded to two decimals. HTML, shortcodes, entities, malformed links, fragments, mailto, tel, and javascript targets are handled safely. No content is modified.
+
+SEO Readiness is a centralized weighted 0–100 result labeled Needs Work, Fair, Good, or Excellent, with passed checks, warnings, and blocking issues. It is not a plugin score and does not guarantee rankings.
+
+`AICS_Manual_SEO_Service` resolves the owned persistent manual article and current user-scoped SEO configuration server-side. Explicit generation advances through pending/generating, makes one provider request, analyzes, and persists on the same article as generated or review_required. Regeneration is explicit and forbidden after applied. Manual editing normalizes fields and reruns analysis without AI or usage increment.
+
+Manual Studio adds article-specific nonce-protected POST actions for Generate/Regenerate and Save SEO Data. The review shows status, target, editable normalized fields, recommendation counts, SEO Readiness, passes, warnings, and blockers. It never renders raw prompts, responses, stack traces, or analysis JSON. Repository persistence reuses the shared excerpt and featured-image alt fields, records target/timestamps/JSON analysis, and does not change article content or written-content status. Usage logging adds `seo_metadata_generation` with only safe operational fields.
+
+Files created: `includes/seo/index.php`, `class-seo-generation-request.php`, `class-seo-generation-result.php`, `class-seo-recommendation-profile.php`, `class-seo-prompt-builder.php`, `class-seo-quality-analyzer.php`, `class-seo-generation-service.php`, and `includes/services/class-manual-seo-service.php`.
+
+Files modified: `ai-content-studio.php`, `includes/ai/class-ai-request.php`, `includes/providers/class-openai-provider.php`, `includes/services/class-usage-logger.php`, `includes/services/class-seo-state.php`, `includes/database/class-article-repository.php`, `includes/admin/class-content-studio-page.php`, and `AI_CONTEXT.md`.
+
+Disposable validation used an injected provider implementing the existing contract. One generation caused one provider call and one usage row, persisted on the same article, calculated phrase density and existing link counts, and a manual Save reran analysis without another call or usage row. Malformed, incomplete, empty-keyword, and URL-slug responses returned controlled errors. Disposable records were removed.
+
+Security/privacy: no public endpoint, terms, post metadata, plugin metadata, post-content changes, link insertion, or image insertion were added. No key, authorization data, cookie, nonce, IP, user agent, raw prompt/response, article content, or SEO Instructions are logged.
+
+## Combined V1 SEO Tasks 2.3–2.5 — Links, In-Content Image, and Native Application
+
+Task 2.2 implementation is complete at code level; its manual acceptance testing and Git commit remain intentionally deferred until the complete SEO feature is ready. Combined Tasks 2.3–2.5 implement Manual Studio SEO enhancement and native WordPress application only. Automation worker SEO and Yoast, Rank Math, and AIOSEO metadata integration have not begun.
+
+`AICS_Internal_Link_Candidate_Service` queries a bounded pool of published, public posts/pages and viewable products without loading full candidate content. It excludes the current post, protected/non-public content, unusable/duplicate permalinks, and URLs already linked. `AICS_Internal_Link_Recommendation_Service` ranks controlled server-built candidates by normalized focus/title/slug/taxonomy overlap and returns only verified post IDs/URLs with natural anchors found in the article. No AI-returned or browser URL can become an internal target; deterministic recommendation is always available.
+
+External candidates come only from normalized trusted URLs and domains in SEO configuration. The same configuration is available to Manual Studio, automation profiles, and immutable snapshots. `AICS_External_Link_Validation_Service` permits HTTP(S) only, rejects credentials, localhost/local/internal names, private/reserved/loopback/link-local resolution, admin/login paths, invalid DNS, unsafe schemes, and unvalidated redirects. It uses bounded `wp_safe_remote_head()` requests with SSL verification and revalidates a controlled redirect before a second request. Timeouts and non-2xx responses are not treated as verification. No search or fabricated URL exists.
+
+`AICS_SEO_Link_Insertion_Service` modifies only simple safe paragraph text, skips headings, existing anchors, code/pre/script/style/button/captions, preserves Gutenberg comments and existing HTML, detects existing URLs, and records inserted/recommended/failed status without arbitrary HTML. Reapplication inspects the current content and does not duplicate URLs. Missing safe placements remain recommendations with a controlled reason.
+
+`AICS_Content_Image_Insertion_Service` validates the existing article-owned featured-image attachment through the shared ownership service and reuses its attachment ID. It creates a native core/image block with safe HTML fallback, supports disabled/after-introduction/before-first-H2/after-first-H2/middle placement, uses the first suitable paragraph as fallback, and detects the attachment ID/wp-image class before insertion. It never generates, uploads, copies, replaces, or creates another attachment.
+
+`AICS_Native_SEO_Application_Service` validates the owned Manual Studio post, applies post slug/excerpt/enhanced content, creates or reuses bounded category/tag terms through WordPress APIs, appends assignments without deleting unrelated terms, synchronizes reviewed alt text, reruns deterministic SEO analysis, persists final content/link records/analysis, and marks SEO applied only after the WordPress update. WordPress core has no dedicated SEO-title or meta-description fields, so those remain in the AICS article record and no meta-description tag is injected.
+
+Content conflict protection requires exact article/post equality for the first application. Successful application stores only SHA-256 ownership evidence in `_aics_managed_content_hash`, `_aics_last_seo_application_hash`, `_aics_seo_applied`, and `_aics_content_image_attachment_id`. Later application refuses to overwrite a post whose current content no longer matches the managed hash, returning `seo_post_content_conflict`. It never stores full content in post metadata.
+
+Repeated native application reuses the associated post, attachment, terms, links, slug, and managed content. Existing AICS insertions are detected, deterministic application makes no provider request, and direct WordPress editor changes are preserved through conflict refusal. Controlled application failures persist a bounded SEO error/needs-attention state unless the article was already applied.
+
+Manual Studio adds trusted-source controls, a bounded application preview, link/image/application summaries, and an article-specific nonce-protected **Apply SEO to WordPress Draft** action. The browser cannot submit authoritative post content, attachment IDs, target URLs, plugin target, or analysis. Rendering performs no external verification and changes no post.
+
+Files created: `includes/seo/class-internal-link-candidate-service.php`, `class-internal-link-recommendation-service.php`, `class-external-link-validation-service.php`, `class-external-link-recommendation-service.php`, `class-seo-link-insertion-service.php`, `class-content-image-insertion-service.php`, `class-native-seo-application-service.php`, and `includes/services/class-manual-seo-application-service.php`.
+
+Files modified for the combined task: `ai-content-studio.php`, `includes/services/class-seo-configuration.php`, `includes/database/class-article-repository.php`, `includes/admin/class-content-studio-page.php`, `includes/admin/class-automations-page.php`, and `AI_CONTEXT.md`.
+
+Code-level disposable validation confirmed native post application, stable reapplication, term reuse, Gutenberg-comment preservation, SHA-256 managed hashes, direct-editor conflict refusal, private-loopback URL rejection, safe paragraph insertion without existing-link damage, and owned attachment reuse with second-pass image detection. No manual acceptance testing has been claimed and no Git commit has been created.
+
+## Final Combined V1 SEO Implementation
+
+The accelerated-development exception authorized one remaining V1 SEO code pass while deferring manual acceptance. Tasks 2.2 and 2.3–2.5 were audited and retained: structured generation, deterministic AICS SEO Readiness, trusted link validation/insertion, featured-image reuse, native application, idempotency, and managed-content conflict protection form the shared foundation.
+
+Schema `0.13.0` adds SEO generation/application attempts, provider/model, adapter/version, bounded application report, and analyzed/approved timestamps without recreating the articles table or erasing rows. Reports exclude content, prompts, raw responses, credentials, SQL, stack traces, and plugin objects.
+
+`AICS_SEO_Application_Result` normalizes application output. Native remains the always-available fallback and does not inject head meta. Yoast centralizes `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, and `_yoast_wpseo_focuskw`; Rank Math centralizes `rank_math_title`, `rank_math_description`, and `rank_math_focus_keyword`; AIOSEO uses its current Post model and `save()` rather than custom table SQL or obsolete `_aioseop_*` keys. Installed-source inspection recorded Yoast 28.2, Rank Math 1.0.275, and AIOSEO 5.0.0.1 as audit facts, not hardcoded gates.
+
+Auto priority is Yoast, Rank Math, AIOSEO, then native. Explicit unavailable targets fail without fallback. Only one plugin adapter receives writes after native application. Values are read back and compared, refresh is defensive, and plugin scores are not scraped.
+
+`AICS_SEO_Workflow_Service` is shared by Manual Studio and automation. `generate_seo` and `apply_seo` are executable/recoverable worker steps; each invocation handles at most one article, so multiple articles advance sequentially. Snapshot runs consume immutable `seo_settings`; legacy snapshots resolve SEO disabled. Generation/application attempt policies preserve valid generated data on application retry. Posts, attachments, terms, links, and adapter selection are reused. Content hashes refuse external-editor conflicts and insertions remain duplicate-safe.
+
+The configurable SEO Quality Gate supports a 0–100 minimum, core metadata, successful application, and adapter verification. Manual Studio treats its threshold as guidance; automation uses its snapshot. The four instruction fields remain isolated by stage. System Status reports adapter detection, selection, version, compatibility, supported fields, and multiple-plugin warnings without sensitive data.
+
+Files created in this pass: `class-seo-application-result.php`, `class-abstract-postmeta-seo-adapter.php`, `class-yoast-seo-adapter.php`, `class-rank-math-seo-adapter.php`, `class-aioseo-adapter.php`, `class-seo-quality-gate.php`, `class-seo-workflow-service.php`, and `class-automation-seo-service.php`. Modified areas include bootstrap/schema, article/run persistence, worker/recovery/status maps, Manual SEO application, SEO configuration, Manual Studio, Automations, System Status, and this context.
+
+Known limitations: third-party indexing refresh is best-effort; plugin analysis scores are intentionally absent; external links require trusted reachable sources and natural anchors; no SERP/volume/rank/schema/canonical/robots/redirect/social/licensing/billing/V2 work was added. Manual SEO acceptance testing remains pending. Yoast, Rank Math, and AIOSEO must be tested one at a time.
+
+Next task: **Combined V1 SEO End-to-End Acceptance Testing**.
+
+## Rank Math Quality Gate Consistency Fix
+
+Manual Studio testing with Rank Math 1.0.275 populated `rank_math_title`, `rank_math_description`, and `rank_math_focus_keyword` successfully and produced an AICS SEO Readiness score of 79 against the saved Manual Studio minimum of 50. The adapter application report showed native and Rank Math application succeeded and all three fields passed read-back verification. A contradictory persisted state was nevertheless observed: `seo_status = applied` with `seo_last_error_code = seo_quality_gate_failed`.
+
+The exact root cause was not Rank Math's local-site noindex notice or plugin scoring. The deterministic analyzer had classified missing focus-keyword placement in the first 150 visible words as an analysis blocker. The Quality Gate treated every item in `blocking_issues` as fatal even when it represented a placement preference, and the Manual application wrapper then recorded the generic gate error onto an already-applied row. The existing applied-row shortcut also prevented a normal reapplication from repairing that stale error.
+
+Analyzer and gate severity are now centralized around genuine structural blockers. Keyword placement, density, optional title preferences, link availability, plugin-score availability, and similar optimization checks remain warnings. The gate separately reports missing core metadata, readiness below the normalized 0–100 minimum, genuine analysis blockers, native application failure, and required adapter verification failure. Numeric scores and minimums are compared numerically in the same 0–100 scale; 79 passes 50, while 0.79 remains 0.79 rather than being silently rescaled.
+
+The site-wide WordPress noindex setting is now represented only as the controlled `site_noindex` environment notice. It does not change AICS SEO Readiness, become an article blocker, affect Rank Math verification, or prevent applying SEO to a local draft.
+
+Rank Math read-back comparison normalizes slashes, HTML entities, whitespace, and WordPress metadata values. Its focus-keyword comparison safely uses the first comma-separated focus phrase when Rank Math stores more than one phrase. It does not require a Rank Math score, account, Content AI, or Pro.
+
+Final gate evaluation now uses the deterministic analysis generated after native content/link/image application and adapter verification. The repository persists final content, analysis, bounded application report, status, applied timestamp, and controlled error in one update. A passed application stores `applied` and clears stale errors. A genuine final gate failure stores `needs_attention`, omits the applied timestamp, retains the high-level gate error, and records exact safe failed-condition IDs in the application report. Manual Studio no longer writes a second generic error after the workflow already persisted a consistent outcome. Applied rows with a stale error are allowed through the normal idempotent reapplication path, with no AI request or duplicate content elements.
+
+Files modified for this fix: `includes/seo/class-seo-quality-analyzer.php`, `includes/services/class-seo-quality-gate.php`, `includes/services/class-abstract-postmeta-seo-adapter.php`, `includes/services/class-rank-math-seo-adapter.php`, `includes/services/class-seo-workflow-service.php`, `includes/services/class-manual-seo-application-service.php`, `includes/database/class-article-repository.php`, and `AI_CONTEXT.md`.
+
+Code-level validation confirmed that the observed 79/50 case passes, the former introduction issue is a warning, simulated noindex remains non-blocking, and Rank Math title/description/focus-keyword read-back succeeds. Manual reapplication testing through the browser remains required.
+
+Current limitations: external links require a reachable trusted URL and a natural existing anchor; no web search exists. Image replacement after a future featured-image change remains manual. Yoast, Rank Math, and AIOSEO metadata integration and Automation SEO generation/application are not implemented. Next task: **Combined V1 SEO Task 2.6–2.8 — SEO Plugin Adapters, Automation Worker Integration, Approval and Publishing Enforcement**. It has not begun.
+
+Current limitations: plugin metadata application, term creation, link recommendation/insertion, external verification, image insertion, automation SEO generation, SEO approval, publishing guards, keyword research, SERP analysis, and rank tracking remain unimplemented. Next task: **V1 Task 2.3 — Internal and External Link Recommendation and Insertion Engine**. It has not begun.
+
 Validation: all plugin PHP files pass syntax validation with the XAMPP PHP CLI, and `git diff --check` reports no whitespace errors. Current limitations: SEO metadata generation/analysis, keyword research, link selection/verification, content-image insertion, SEO approval, adapter metadata reads/writes, and plugin-specific adapters remain unimplemented. The required-image failure/retry acceptance scenario also remains untested. Next task: **V1 Task 2.2 — AI SEO Metadata Generation and Quality Analysis**. It has not begun.

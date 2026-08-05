@@ -36,6 +36,8 @@ final class AICS_Automations_Page {
 				<?php self::render_content( $profile['content_settings'] ); ?>
 				<?php self::render_featured_images( $profile['content_settings']['featured_images'] ?? array() ); ?>
 				<?php self::render_seo( $profile['content_settings']['seo'] ?? array() ); ?>
+				<?php self::render_trusted_sources( $profile['content_settings']['seo'] ?? array() ); ?>
+				<?php self::render_seo_quality_gate( $profile['content_settings']['seo'] ?? array() ); ?>
 				<?php self::render_schedule( $profile['schedule_settings'] ); ?>
 				<?php self::render_approvals( $profile['workflow_rules'], $profile['mode'] ); ?>
 				<?php self::render_publishing( $profile['publishing_settings'] ); ?>
@@ -152,6 +154,9 @@ final class AICS_Automations_Page {
 	private static function redirect(string $notice):void{wp_safe_redirect(add_query_arg('aics_notice',sanitize_key($notice),admin_url('admin.php?page='.self::PAGE_SLUG)));exit;}
 	private static function state_key():string{return 'aics_automation_errors_'.get_current_user_id();}
 	private static function consume_form_state():array{$state=get_transient(self::state_key());delete_transient(self::state_key());return is_array($state)?$state:array();}
+	private static function render_trusted_sources(array $saved):void{$s=AICS_SEO_Configuration::normalize_stored($saved,false);?><section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e('Trusted External SEO Sources','ai-content-studio');?></h2></div><div class="aics-card-body"><p><?php esc_html_e('Optional public URLs and domains are copied into immutable run snapshots. No verification occurs while saving.','ai-content-studio');?></p><p><label><?php esc_html_e('Trusted URLs, one per line','ai-content-studio');?><textarea class="large-text" rows="4" name="seo_settings[trusted_external_urls]"><?php echo esc_textarea(implode("\n",$s['trusted_external_urls']));?></textarea></label></p><p><label><?php esc_html_e('Trusted domains, one per line','ai-content-studio');?><textarea class="large-text" rows="3" name="seo_settings[trusted_external_domains]"><?php echo esc_textarea(implode("\n",$s['trusted_external_domains']));?></textarea></label></p></div></section><?php }
+	private static function render_seo_quality_gate(array $saved):void{$s=AICS_SEO_Configuration::normalize_stored($saved,false);$q=$s['quality_gate'];?><section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e('SEO Quality Gate','ai-content-studio');?></h2></div><div class="aics-card-body aics-form-grid"><?php self::checkbox('seo_settings[quality_gate][enabled]',__('Enforce SEO quality before delivery','ai-content-studio'),$q['enabled']);self::number_field('seo_settings[quality_gate][minimum_readiness_score]',__('Minimum AICS SEO Readiness','ai-content-studio'),$q['minimum_readiness_score'],0,100);self::checkbox('seo_settings[quality_gate][require_core_metadata]',__('Require core metadata','ai-content-studio'),$q['require_core_metadata']);self::checkbox('seo_settings[quality_gate][require_successful_application]',__('Require successful application','ai-content-studio'),$q['require_successful_application']);self::checkbox('seo_settings[quality_gate][require_adapter_verification]',__('Require plugin adapter verification','ai-content-studio'),$q['require_adapter_verification']);?></div></section><?php }
+
 	private static function render_notice(): void {
 		$code = isset( $_GET['aics_notice'] ) && is_string( $_GET['aics_notice'] ) ? sanitize_key( wp_unslash( $_GET['aics_notice'] ) ) : '';
 		$map  = array(

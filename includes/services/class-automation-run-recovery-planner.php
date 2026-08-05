@@ -3,8 +3,8 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class AICS_Automation_Run_Recovery_Planner {
-	private const EXECUTABLE = array( 'pending','generate_ideas','evaluate_ideas','queue_idea','generate_article','create_post','generate_featured_image','schedule_post','publish_post','finalize' );
-	private const RETRYABLE = array( 'provider_request_failed','provider_network_error','provider_rate_limit','idea_persistence_failed','idea_transition_failed','article_persistence_failed','article_transition_failed','wordpress_post_creation_failed','wordpress_schedule_failed','wordpress_publish_failed','no_future_publishing_slot','planned_publish_time_save_failed','article_schedule_sync_failed','article_publish_sync_failed','image_provider_rate_limited','image_provider_timeout','image_provider_request_failed','media_library_upload_failed','featured_image_assignment_failed','temporary_image_creation_failed','attachment_persistence_failed' );
+	private const EXECUTABLE = array( 'pending','generate_ideas','evaluate_ideas','queue_idea','generate_article','create_post','generate_featured_image','generate_seo','apply_seo','schedule_post','publish_post','finalize' );
+	private const RETRYABLE = array( 'provider_request_failed','provider_network_error','provider_rate_limit','idea_persistence_failed','idea_transition_failed','article_persistence_failed','article_transition_failed','wordpress_post_creation_failed','wordpress_schedule_failed','wordpress_publish_failed','no_future_publishing_slot','planned_publish_time_save_failed','article_schedule_sync_failed','article_publish_sync_failed','image_provider_rate_limited','image_provider_timeout','image_provider_request_failed','media_library_upload_failed','featured_image_assignment_failed','temporary_image_creation_failed','attachment_persistence_failed','seo_generation_failed','invalid_seo_generation_response','seo_native_application_failed','seo_term_creation_failed','seo_adapter_application_failed','seo_plugin_refresh_failed' );
 	private AICS_Automation_Run_Repository $runs;
 	private AICS_Content_Idea_Repository $ideas;
 	private AICS_Article_Repository $articles;
