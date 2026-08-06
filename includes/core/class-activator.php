@@ -22,9 +22,11 @@ final class Activator {
 	 *
 	 * @return void
 	 */
-	public static function activate(): void {
+	public static function activate( bool $network_wide = false ): void {
 		self::check_requirements();
+		$existing = false !== get_option( 'aics_db_version', false ) || false !== get_option( 'aics_settings', false );
 		Installer::install();
+		\AICS_Setup_Wizard_State_Service::activate( $existing, $network_wide );
 		\AICS_Automation_Scheduler::register_schedule();
 		\AICS_Automation_Scheduler::ensure_scheduled();
 

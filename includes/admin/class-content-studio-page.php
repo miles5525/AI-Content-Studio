@@ -59,6 +59,7 @@ final class AICS_Content_Studio_Page {
 	 * @return void
 	 */
 	public static function register(): void {
+		AICS_Manual_Studio_Wizard_Controller::register();
 		add_action( 'admin_post_' . self::ACTION, array( self::class, 'handle_submission' ) );
 		add_action( 'admin_post_' . self::GENERATE_ACTION, array( self::class, 'handle_generate_ideas' ) );
 		add_action( 'admin_post_' . self::SELECT_ACTION, array( self::class, 'handle_select_idea' ) );
@@ -80,6 +81,8 @@ final class AICS_Content_Studio_Page {
 	 */
 	public static function render(): void {
 		self::require_permission();
+		AICS_Manual_Studio_Wizard_Controller::render_page();
+		return;
 
 		$has_workflow     = self::has_workflow_state();
 		$state            = self::get_form_state();

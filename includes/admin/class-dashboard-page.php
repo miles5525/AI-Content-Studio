@@ -1,119 +1,47 @@
 <?php
-/**
- * Usage dashboard.
- *
- * @package AIContentStudio
- */
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+/** User-focused product dashboard. @package AIContentStudio */
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class AICS_Dashboard_Page {
 	public static function render(): void {
-		if ( ! current_user_can( \AIContentStudio\Core\Permissions::manage() ) ) {
-			wp_die( esc_html__( 'You do not have permission to access this page.', 'ai-content-studio' ) );
-		}
-
-		$repository = new AICS_Usage_Log_Repository();
-		$summary    = $repository->get_summary();
-		$summary['drafts_created'] = self::count_generated_wordpress_drafts();
-		$runs_attention = ( new AICS_Automation_Run_Repository() )->count_runs( array( 'needs_attention'=>true ) );
-		$health = ( new AICS_Automation_Health_Monitor() )->get_snapshot( false );
-		$activity   = $repository->get_recent( 10 );
-		$cards      = array(
-			'total_ai_requests'      => __( 'Total AI Requests', 'ai-content-studio' ),
-			'successful_ai_requests' => __( 'Successful AI Requests', 'ai-content-studio' ),
-			'failed_ai_requests'     => __( 'Failed AI Requests', 'ai-content-studio' ),
-			'articles_generated'     => __( 'Articles Generated', 'ai-content-studio' ),
-			'drafts_created'         => __( 'WordPress Drafts Created', 'ai-content-studio' ),
-		);
+		if ( ! current_user_can( \AIContentStudio\Core\Permissions::manage() ) ) { wp_die( esc_html__( 'You do not have permission to access this page.', 'ai-content-studio' ) ); }
+		try { $data=self::data(); } catch ( Throwable $e ) { $data=self::empty_data(); ?><div class="notice notice-warning"><p><?php esc_html_e('Some Dashboard information could not be loaded. Other plugin features remain available.','ai-content-studio');?></p></div><?php }
+		$attention_total=array_sum(array_column($data['attention'],'count'));
 		?>
 		<div class="wrap aics-admin-wrap aics-dashboard-page">
-			<header class="aics-page-header">
-				<h1 class="aics-page-title"><?php esc_html_e( 'AI Content Studio Dashboard', 'ai-content-studio' ); ?></h1>
-				<p class="aics-page-description"><?php esc_html_e( 'A lightweight summary of AI requests and WordPress drafts created by the plugin.', 'ai-content-studio' ); ?></p>
-			</header>
-			<div class="aics-dashboard-cards">
-				<?php foreach ( $cards as $key => $label ) : ?>
-					<div class="aics-dashboard-card aics-dashboard-card--<?php echo esc_attr( 'successful_ai_requests' === $key ? 'success' : ( 'failed_ai_requests' === $key ? 'failed' : 'neutral' ) ); ?>"><span><?php echo esc_html( $label ); ?></span><strong><?php echo esc_html( number_format_i18n( $summary[ $key ] ) ); ?></strong></div>
-				<?php endforeach; ?>
-			</div>
-			<section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e( 'Runs Needing Attention', 'ai-content-studio' ); ?></h2></div><div class="aics-card-body"><p><strong><?php echo esc_html( number_format_i18n( $runs_attention ) ); ?></strong></p><a class="button" href="<?php echo esc_url( add_query_arg( array( 'page'=>'aics-automation-runs', 'run_view'=>'needs_attention' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Review Runs Needing Attention', 'ai-content-studio' ); ?></a></div></section>
-			<section class="aics-card"><div class="aics-card-header"><h2><?php esc_html_e( 'Automation Health', 'ai-content-studio' ); ?></h2></div><div class="aics-card-body"><dl class="aics-run-details"><div><dt><?php esc_html_e('Overall Status','ai-content-studio');?></dt><dd><?php echo esc_html(ucfirst($health['overall_status']??'unknown'));?></dd></div><div><dt><?php esc_html_e('Critical Issues','ai-content-studio');?></dt><dd><?php echo esc_html(number_format_i18n(absint($health['critical_issue_count']??0)));?></dd></div><div><dt><?php esc_html_e('Warnings','ai-content-studio');?></dt><dd><?php echo esc_html(number_format_i18n(absint($health['warning_issue_count']??0)));?></dd></div><div><dt><?php esc_html_e('Last Checked','ai-content-studio');?></dt><dd><?php echo esc_html(!empty($health['checked_at'])?get_date_from_gmt($health['checked_at'],get_option('date_format').' '.get_option('time_format')):__('Never','ai-content-studio'));?></dd></div></dl><p><a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>'aics-automation-runs','run_view'=>'health'),admin_url('admin.php')));?>"><?php esc_html_e('Review Automation Health','ai-content-studio');?></a></p></div></section>
-
-			<h2><?php esc_html_e( 'Recent Activity', 'ai-content-studio' ); ?></h2>
-			<?php if ( empty( $activity ) ) : ?>
-				<div class="aics-dashboard-empty aics-empty-state"><h3><?php esc_html_e( 'No activity yet', 'ai-content-studio' ); ?></h3><p><?php esc_html_e( 'Generate blog ideas or an article to begin building your activity history.', 'ai-content-studio' ); ?></p><a class="button button-primary aics-button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a></div>
-			<?php else : ?>
-				<div class="aics-dashboard-table-wrap"><table class="widefat striped aics-dashboard-table"><thead><tr><th><?php esc_html_e( 'Activity', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Status', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Provider / Model', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'User', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Related Item', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Duration', 'ai-content-studio' ); ?></th><th><?php esc_html_e( 'Date', 'ai-content-studio' ); ?></th></tr></thead><tbody>
-				<?php foreach ( $activity as $entry ) : ?><?php self::render_activity_row( $entry ); ?><?php endforeach; ?>
-				</tbody></table></div>
-			<?php endif; ?>
-			<nav class="aics-dashboard-links" aria-label="<?php echo esc_attr__( 'Dashboard quick links', 'ai-content-studio' ); ?>"><a class="button button-primary aics-button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-create-content' ) ); ?>"><?php esc_html_e( 'Create Content', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-content-history' ) ); ?>"><?php esc_html_e( 'Content History', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-settings' ) ); ?>"><?php esc_html_e( 'Settings', 'ai-content-studio' ); ?></a></nav>
-		</div>
-		<?php
+			<header class="aics-page-header aics-dashboard-welcome"><h1 class="aics-page-title"><?php esc_html_e('AI Content Studio','ai-content-studio');?></h1><p class="aics-page-description"><?php esc_html_e('Create, optimize, and automate WordPress content from one workspace.','ai-content-studio');?></p><p class="aics-dashboard-context"><?php echo esc_html($attention_total?__('You have items waiting for review.','ai-content-studio'):(!empty($data['automation']['next_run'])?__('Your next automation run is scheduled.','ai-content-studio'):__('Your content workspace is ready.','ai-content-studio')));?></p></header>
+			<?php self::setup_banner(); ?>
+			<nav class="aics-dashboard-primary-actions" aria-label="<?php esc_attr_e('Primary actions','ai-content-studio');?>"><a class="button button-primary aics-button-primary" href="<?php echo esc_url(admin_url('admin.php?page=aics-create-content'));?>"><?php esc_html_e('Create Content','ai-content-studio');?></a><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=aics-automations'));?>"><?php esc_html_e('Create Automation','ai-content-studio');?></a><a class="aics-dashboard-text-link" href="<?php echo esc_url(admin_url('admin.php?page=aics-content-history'));?>"><?php esc_html_e('View Content History','ai-content-studio');?></a></nav>
+			<section aria-labelledby="aics-summary-title"><h2 id="aics-summary-title" class="screen-reader-text"><?php esc_html_e('Content summary','ai-content-studio');?></h2><div class="aics-dashboard-cards"><?php foreach($data['metrics'] as $metric):?><article class="aics-dashboard-card"><span><?php echo esc_html($metric['label']);?></span><strong><?php echo esc_html(number_format_i18n($metric['value']));?></strong><small><?php echo esc_html($metric['help']);?></small></article><?php endforeach;?></div></section>
+			<section class="aics-card aics-dashboard-section" aria-labelledby="aics-attention-title"><div class="aics-card-header"><h2 id="aics-attention-title"><?php esc_html_e('Needs Attention','ai-content-studio');?></h2></div><div class="aics-card-body"><?php if(!$data['attention']):?><p class="aics-dashboard-positive"><?php esc_html_e('Nothing needs your attention.','ai-content-studio');?></p><?php else:?><ul class="aics-attention-list"><?php foreach($data['attention'] as $item):?><li><span><strong><?php echo esc_html(sprintf($item['message'],$item['count']));?></strong><small><?php echo esc_html($item['help']);?></small></span><a href="<?php echo esc_url($item['url']);?>"><?php echo esc_html($item['action']);?></a></li><?php endforeach;?></ul><?php endif;?></div></section>
+			<?php self::automation($data['automation']); ?>
+			<?php self::recent_content($data['recent']); ?>
+		</div><?php
 	}
 
-	private static function render_activity_row( object $entry ): void {
-		$operations = array(
-			'openai_connection_test'  => __( 'OpenAI Connection Test', 'ai-content-studio' ),
-			'generate_blog_ideas'      => __( 'Blog Ideas Generated', 'ai-content-studio' ),
-			'evaluate_content_ideas'   => __( 'Idea Evaluation', 'ai-content-studio' ),
-			'generate_article_draft'   => __( 'Article Draft Generated', 'ai-content-studio' ),
-			'create_wordpress_draft'   => __( 'WordPress Draft Created', 'ai-content-studio' ),
-		);
-		$statuses = array( 'success' => __( 'Success', 'ai-content-studio' ), 'failed' => __( 'Failed', 'ai-content-studio' ) );
-		$user     = get_userdata( absint( $entry->user_id ?? 0 ) );
-		$provider = sanitize_text_field( (string) ( $entry->provider ?? '' ) );
-		$model    = sanitize_text_field( (string) ( $entry->model ?? '' ) );
-		$operation = sanitize_key( (string) ( $entry->operation ?? '' ) );
-		$status    = sanitize_key( (string) ( $entry->status ?? '' ) );
-		$post_id  = absint( $entry->object_id ?? 0 );
-		$edit     = $post_id > 0 && current_user_can( 'edit_post', $post_id ) ? get_edit_post_link( $post_id, '' ) : '';
-		$duration = absint( $entry->duration_ms ?? 0 );
-		$timestamp = strtotime( (string) ( $entry->created_at ?? '' ) . ' UTC' );
-		?>
-		<tr><td><?php echo esc_html( $operations[ $operation ] ?? __( 'Unknown Activity', 'ai-content-studio' ) ); ?></td><td><span class="aics-status aics-status--<?php echo esc_attr( $status ); ?>"><?php echo esc_html( $statuses[ $status ] ?? __( 'Unknown', 'ai-content-studio' ) ); ?></span></td><td><?php echo esc_html( '' !== $provider ? ucfirst( $provider ) . ( '' !== $model ? ' / ' . $model : '' ) : '—' ); ?></td><td><?php echo esc_html( $user instanceof WP_User ? $user->display_name : __( 'Deleted user', 'ai-content-studio' ) ); ?></td><td><?php if ( is_string( $edit ) && '' !== $edit ) : ?><a href="<?php echo esc_url( $edit ); ?>"><?php esc_html_e( 'Edit Draft', 'ai-content-studio' ); ?></a><?php else : ?>—<?php endif; ?></td><td><?php echo esc_html( self::format_duration( $duration ) ); ?></td><td><?php echo esc_html( false !== $timestamp ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $timestamp, wp_timezone() ) : '—' ); ?></td></tr>
-		<?php
+	private static function data(): array {
+		$articles=new AICS_Article_Repository();$profiles=new AICS_Automation_Profile_Repository();$runs=new AICS_Automation_Run_Repository();$ideas=new AICS_Content_Idea_Repository();
+		$generated_statuses=array('generated','pending_approval','approved','rejected','draft_created','scheduled','published','paused','needs_attention');
+		$generated=$articles->count_articles(array('statuses'=>$generated_statuses));
+		$post_counts=self::post_counts();$active_profiles=$profiles->get_profiles(array('status'=>'active','limit'=>100,'orderby'=>'next_run_at','order'=>'ASC'));
+		$attention=array();self::attention($attention,$ideas->count_ideas(array('status'=>'pending_approval')),__('%d ideas are waiting for approval.','ai-content-studio'),__('Review generated ideas before article creation continues.','ai-content-studio'),admin_url('admin.php?page=aics-approvals&approval_type=ideas'),__('Review Ideas','ai-content-studio'));
+		self::attention($attention,$articles->count_articles(array('status'=>'pending_approval')),__('%d articles are waiting for approval.','ai-content-studio'),__('Review articles before their automation continues.','ai-content-studio'),admin_url('admin.php?page=aics-approvals&approval_type=articles'),__('Review Articles','ai-content-studio'));
+		self::attention($attention,$runs->count_runs(array('current_step'=>'waiting_publish_approval')),__('%d posts are waiting for publishing approval.','ai-content-studio'),__('Approve or retain the prepared WordPress drafts.','ai-content-studio'),admin_url('admin.php?page=aics-approvals&approval_type=publishing'),__('Review Publishing','ai-content-studio'));
+		self::attention($attention,$runs->count_runs(array('needs_attention'=>true)),__('%d automation runs need attention.','ai-content-studio'),__('Review the run and choose an available recovery action.','ai-content-studio'),admin_url('admin.php?page=aics-automation-runs&run_view=needs_attention'),__('Review Runs','ai-content-studio'));
+		$latest=$runs->get_runs(array('limit'=>1,'orderby'=>'id','order'=>'DESC'));$active_run=array();foreach(array('running','retrying','queued') as $status){$candidate=$runs->get_runs(array('status'=>$status,'limit'=>1,'orderby'=>'updated_at','order'=>'DESC'));if($candidate){$active_run=$candidate[0];break;}}
+		$next='';foreach($active_profiles as $profile){if(!empty($profile['next_run_at'])){$next=$profile['next_run_at'];break;}}
+		$recent=$articles->get_articles(array('statuses'=>$generated_statuses,'limit'=>6,'orderby'=>'updated_at','order'=>'DESC'));$post_ids=array_values(array_filter(array_map(static fn($a)=>absint($a['wordpress_post_id']??0),$recent)));if($post_ids){_prime_post_caches($post_ids,true,true);}
+		return array('metrics'=>array(array('label'=>__('Articles Generated','ai-content-studio'),'value'=>$generated,'help'=>__('Persistent completed article records','ai-content-studio')),array('label'=>__('WordPress Drafts','ai-content-studio'),'value'=>$post_counts['drafts'],'help'=>__('Draft or pending generated posts','ai-content-studio')),array('label'=>__('Published or Scheduled','ai-content-studio'),'value'=>$post_counts['delivered'],'help'=>__('Published and scheduled generated posts','ai-content-studio')),array('label'=>__('Active Automations','ai-content-studio'),'value'=>count($active_profiles),'help'=>__('Profiles currently enabled','ai-content-studio'))),'attention'=>$attention,'automation'=>array('configured'=>(bool)$profiles->get_profiles(array('limit'=>1)),'active'=>count($active_profiles),'next_run'=>$next,'last'=>$latest[0]??array(),'current'=>$active_run),'recent'=>$recent);
 	}
 
-	private static function format_duration( int $milliseconds ): string {
-		if ( $milliseconds < 1 ) { return '—'; }
-		if ( $milliseconds < 1000 ) { return sprintf( __( '%d ms', 'ai-content-studio' ), $milliseconds ); }
-		return sprintf( __( '%.2f s', 'ai-content-studio' ), $milliseconds / 1000 );
-	}
-
-	/**
-	 * Counts currently existing AI Content Studio WordPress drafts.
-	 *
-	 * This deliberately uses native post state instead of usage logs so drafts
-	 * created before logging was introduced are included and deleted, trashed,
-	 * or status-changed posts are excluded.
-	 */
-	private static function count_generated_wordpress_drafts(): int {
-		$query = new WP_Query(
-			array(
-				'post_type'              => 'post',
-				'post_status'            => 'draft',
-				'posts_per_page'         => 1,
-				'fields'                 => 'ids',
-				'no_found_rows'          => false,
-				'ignore_sticky_posts'    => true,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
-				'meta_query'             => array(
-					array(
-						'key'     => '_aics_generated_post',
-						'value'   => '1',
-						'compare' => '=',
-					),
-				),
-			)
-		);
-
-		return absint( $query->found_posts );
-	}
-
-	private function __construct() {}
+	private static function post_counts():array{$base=array('post_type'=>'post','posts_per_page'=>1,'fields'=>'ids','no_found_rows'=>false,'ignore_sticky_posts'=>true,'update_post_meta_cache'=>false,'update_post_term_cache'=>false,'meta_query'=>array(array('key'=>'_aics_generated_post','value'=>'1')));$draft=new WP_Query(array_merge($base,array('post_status'=>array('draft','pending'))));$delivered=new WP_Query(array_merge($base,array('post_status'=>array('publish','future'))));return array('drafts'=>absint($draft->found_posts),'delivered'=>absint($delivered->found_posts));}
+	private static function attention(array &$items,int $count,string $message,string $help,string $url,string $action):void{if($count>0){$items[]=compact('count','message','help','url','action');}}
+	private static function format_utc($value,string $fallback):string{return is_string($value)&&''!==$value?get_date_from_gmt($value,get_option('date_format').' '.get_option('time_format')):$fallback;}
+	private static function step_label(string $step):string{$labels=array('pending'=>'Preparing automation','generate_ideas'=>'Generating ideas','evaluate_ideas'=>'Reviewing content ideas','queue_idea'=>'Preparing an article','waiting_idea_approval'=>'Waiting for idea approval','generate_article'=>'Generating an article','waiting_article_approval'=>'Waiting for article approval','create_post'=>'Creating a WordPress draft','generate_featured_image'=>'Creating a featured image','generate_seo'=>'Preparing SEO','apply_seo'=>'Applying SEO','waiting_publish_approval'=>'Waiting for publishing approval','schedule_post'=>'Scheduling a post','publish_post'=>'Publishing a post','finalize'=>'Completing the automation','complete'=>'Completed');return $labels[$step]??__('Automation in progress','ai-content-studio');}
+	private static function automation(array $a):void{?><section class="aics-card aics-dashboard-section" aria-labelledby="aics-automation-title"><div class="aics-card-header"><h2 id="aics-automation-title"><?php esc_html_e('Automation Overview','ai-content-studio');?></h2></div><div class="aics-card-body"><?php if(!$a['configured']):?><div class="aics-dashboard-inline-empty"><p><?php esc_html_e('Set up an automation to create content on a schedule.','ai-content-studio');?></p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=aics-automations'));?>"><?php esc_html_e('Create Automation','ai-content-studio');?></a></div><?php else:?><dl class="aics-dashboard-automation-grid"><div><dt><?php esc_html_e('Active automations','ai-content-studio');?></dt><dd><?php echo esc_html(number_format_i18n($a['active']));?></dd></div><div><dt><?php esc_html_e('Next scheduled run','ai-content-studio');?></dt><dd><?php echo esc_html(self::format_utc($a['next_run'],__('Not currently scheduled','ai-content-studio')));?></dd></div><div><dt><?php esc_html_e('Last run result','ai-content-studio');?></dt><dd><?php echo esc_html($a['last']?ucfirst($a['last']['status']):__('No automation cycle has run yet.','ai-content-studio'));?></dd></div><div><dt><?php esc_html_e('Current activity','ai-content-studio');?></dt><dd><?php echo esc_html($a['current']?self::step_label($a['current']['current_step']):__('No run is currently active.','ai-content-studio'));?></dd></div></dl><p class="aics-dashboard-section-actions"><a href="<?php echo esc_url(admin_url('admin.php?page=aics-automations'));?>"><?php esc_html_e('View Automations','ai-content-studio');?></a><a href="<?php echo esc_url(admin_url('admin.php?page=aics-automation-runs'));?>"><?php esc_html_e('View Automation Runs','ai-content-studio');?></a></p><?php endif;?></div></section><?php }
+	private static function recent_content(array $items):void{?><section class="aics-card aics-dashboard-section" aria-labelledby="aics-recent-title"><div class="aics-card-header"><h2 id="aics-recent-title"><?php esc_html_e('Recent Content','ai-content-studio');?></h2></div><div class="aics-card-body"><?php if(!$items):?><div class="aics-dashboard-inline-empty"><p><?php esc_html_e('Create your first AI-assisted WordPress article.','ai-content-studio');?></p><a class="button button-primary aics-button-primary" href="<?php echo esc_url(admin_url('admin.php?page=aics-create-content'));?>"><?php esc_html_e('Create Your First Article','ai-content-studio');?></a></div><?php else:?><ul class="aics-recent-content-list"><?php foreach($items as $article):self::recent_item($article);endforeach;?></ul><?php endif;?></div></section><?php }
+	private static function recent_item(array $article):void{$post_id=absint($article['wordpress_post_id']??0);$post=$post_id?get_post($post_id):null;$title=$post instanceof WP_Post&&''!==trim($post->post_title)?$post->post_title:($article['title']?:__('Untitled article','ai-content-studio'));$status=$post instanceof WP_Post?$post->post_status:$article['status'];$labels=array('generated'=>'Article Generated','pending_approval'=>'Waiting for Approval','approved'=>'Approved','draft_created'=>'Draft','draft'=>'Draft','pending'=>'Pending','future'=>'Scheduled','publish'=>'Published','scheduled'=>'Scheduled','published'=>'Published','needs_attention'=>'Needs Attention','rejected'=>'Rejected','paused'=>'Paused');$thumb=$post instanceof WP_Post?get_the_post_thumbnail_url($post,'thumbnail'):'';$action='';$action_label='';if($post instanceof WP_Post&&current_user_can('edit_post',$post_id)){$action=get_edit_post_link($post_id,'');$action_label=__('Edit Draft','ai-content-studio');}elseif('manual'===($article['source_type']??'')&&current_user_can(\AIContentStudio\Core\Permissions::manage())){$action=admin_url('admin.php?page=aics-create-content');$action_label=__('Continue','ai-content-studio');}elseif(absint($article['run_id']??0)){$action=admin_url('admin.php?page=aics-automation-runs&run_id='.absint($article['run_id']));$action_label=__('View Run','ai-content-studio');}$date=$article['updated_at']??$article['created_at']??'';?><li><?php if($thumb):?><img src="<?php echo esc_url($thumb);?>" alt=""><?php else:?><span class="aics-content-placeholder" aria-hidden="true"></span><?php endif;?><span class="aics-recent-content-main"><strong><?php echo esc_html($title);?></strong><small><?php echo esc_html('manual'===($article['source_type']??'')?__('Manual Studio','ai-content-studio'):__('Automation','ai-content-studio'));?> · <?php echo esc_html($labels[$status]??__('Article Generated','ai-content-studio'));?> · <?php echo esc_html(self::format_utc($date,__('Date unavailable','ai-content-studio')));?></small></span><?php if($action):?><a href="<?php echo esc_url($action);?>"><?php echo esc_html($action_label);?></a><?php endif;?></li><?php }
+	private static function empty_data():array{return array('metrics'=>array(),'attention'=>array(),'automation'=>array('configured'=>false,'active'=>0,'next_run'=>'','last'=>array(),'current'=>array()),'recent'=>array());}
+	private static function setup_banner():void{$s=AICS_Setup_Wizard_State_Service::state();if(in_array($s['setup_status'],array('completed','legacy_configured','dismissed'),true)){return;}?><section class="aics-card aics-setup-banner"><div><strong><?php esc_html_e('Finish setting up AI Content Studio','ai-content-studio');?></strong><p><?php esc_html_e('Connect and test your AI provider before creating content.','ai-content-studio');?></p></div><div><a class="button button-primary" href="<?php echo esc_url(admin_url('admin.php?page=aics-setup'));?>"><?php esc_html_e('Continue Setup','ai-content-studio');?></a><form method="post" action="<?php echo esc_url(admin_url('admin-post.php'));?>"><input type="hidden" name="action" value="aics_dismiss_setup"><?php wp_nonce_field('aics_dismiss_setup');?><button class="button" type="submit"><?php esc_html_e('Dismiss','ai-content-studio');?></button></form></div></section><?php }
+	private function __construct(){}
 }

@@ -44,6 +44,8 @@ final class AICS_Settings_Page {
 	 */
 	public static function render(): void {
 		self::require_permission();
+		$section=AICS_Settings_Section_Registry::active();
+		if('general'!==$section){self::render_workspace_section($section);return;}
 
 		$model          = AICS_Settings::get_openai_model();
 		$key_configured = AICS_Settings::has_openai_api_key();
@@ -57,7 +59,7 @@ final class AICS_Settings_Page {
 				<h1 class="aics-page-title"><?php esc_html_e( 'AI Content Studio Settings', 'ai-content-studio' ); ?></h1>
 				<p class="aics-page-description"><?php esc_html_e( 'Configure the AI provider and verify the saved connection securely.', 'ai-content-studio' ); ?></p>
 			</header>
-			<?php self::render_notice(); ?>
+			<div class="aics-settings-layout"><?php self::render_section_navigation('general');?><main class="aics-settings-panel"><header class="aics-settings-panel-header"><h2><?php esc_html_e('General','ai-content-studio');?></h2><p><?php esc_html_e('Configure AI providers, featured images, and plugin defaults.','ai-content-studio');?></p></header><?php self::render_notice(); ?>
 
 			<div class="aics-settings-section">
 				<h2><?php esc_html_e( 'AI Provider Configuration', 'ai-content-studio' ); ?></h2>
@@ -157,9 +159,13 @@ final class AICS_Settings_Page {
 					</form>
 				</div>
 			</div>
+			</main></div>
 		</div>
 		<?php
 	}
+	public static function render_general():void{self::render();}
+	private static function render_workspace_section(string $section):void{$definition=AICS_Settings_Section_Registry::get($section);if(!current_user_can($definition['capability'])){wp_die(esc_html__('You do not have permission to access this settings section.','ai-content-studio'));}?><div class="wrap aics-admin-wrap aics-settings-page"><header class="aics-page-header"><h1 class="aics-page-title"><?php esc_html_e('AI Content Studio Settings','ai-content-studio');?></h1><p class="aics-page-description"><?php esc_html_e('Manage configuration, content records, automation activity, and diagnostics.','ai-content-studio');?></p></header><div class="aics-settings-layout"><?php self::render_section_navigation($section);?><main class="aics-settings-panel"><header class="aics-settings-panel-header"><h2><?php echo esc_html($definition['label']);?></h2><p><?php echo esc_html($definition['description']);?></p></header><div class="aics-settings-embedded"><?php call_user_func($definition['renderer']);?></div></main></div></div><?php }
+	private static function render_section_navigation(string $active):void{?><aside class="aics-settings-sidebar"><h2><?php esc_html_e('Settings','ai-content-studio');?></h2><nav aria-label="<?php esc_attr_e('Settings sections','ai-content-studio');?>"><?php foreach(AICS_Settings_Section_Registry::all() as $key=>$item):if(!current_user_can($item['capability'])){continue;}?><a href="<?php echo esc_url(add_query_arg(array('page'=>'aics-settings','section'=>$key),admin_url('admin.php')));?>" <?php echo $key===$active?'class="is-active" aria-current="page"':'';?>><?php echo esc_html($item['label']);?></a><?php endforeach;?></nav></aside><?php }
 
 	/**
 	 * Saves validated settings.

@@ -58,7 +58,9 @@ final class Plugin {
 			( new Admin_Menu() )->register();
 			( new Assets() )->register();
 			\AICS_Settings_Page::register();
+			\AICS_Setup_Wizard_Page::register();
 			\AICS_Content_Studio_Page::register();
+			\AICS_Content_History_Page::register();
 			\AICS_Automations_Page::register();
 			\AICS_Automation_Runs_Page::register();
 			\AICS_Approvals_Page::register();

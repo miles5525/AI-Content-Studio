@@ -1,5 +1,43 @@
 # AI Content Studio — AI Development Context
 
+## First-Run Setup Wizard (2026-08-06)
+
+AI Content Studio includes a hidden, focused `admin.php?page=aics-setup` onboarding route and a visible **Getting Started** section inside Settings. The six server-authoritative stages are Welcome, AI Provider, Featured Images, SEO Integration, Content Defaults, and Finish. The implementation reuses existing OpenAI credential/model storage and connection testing, featured-image settings/provider capabilities, SEO detection/target labels, shared admin wizard styling, skeletons, accessibility rules, and authenticated AJAX patterns.
+
+`AICS_Setup_Wizard_State_Service` stores only controlled progress, skip state, non-sensitive successful-test evidence, defaults, completion version, and completion time. API keys remain exclusively in `AICS_Settings` and are never returned to JavaScript. Future steps are server-blocked, images may be skipped without deleting their configuration, completion requires a successful test matching the current model, and reopening reads current settings without resetting them.
+
+Fresh-install detection runs before schema installation. A site is treated as legacy when `aics_db_version` or `aics_settings` already exists; it receives `legacy_configured` and no redirect. Only a genuine non-network fresh activation receives a one-use redirect option. The next qualified administrator request deletes it immediately and refuses redirects during bulk activation, network admin, AJAX, REST, cron, or WP-CLI. Incomplete fresh setup has a dismissible Dashboard banner. The setup wizard never generates an article, post, automation run, or SEO metadata.
+
+## Automations AJAX wizard (2026-08-06)
+
+- Automations presents the existing default profile as eight single-page stages: Basics, Content, Workflow, Schedule, Image, SEO, Publishing, and Review.
+- `assets/js/automation-wizard.js` loads only on Automations and provides accessible navigation, loading feedback, browser history, double-submit prevention, and authenticated AJAX persistence.
+- AJAX saves continue through `AICS_Automation_Profile_Service`; the wizard never dispatches a run or calls an AI/image provider. New profiles remain disabled until explicit activation. Editing an active profile preserves its status unless Deactivate is selected.
+- The admin-post handler remains as a non-JavaScript fallback. Existing profiles and automation runs are unchanged.
+
+## User-focused Dashboard redesign (2026-08-06)
+
+- The main Dashboard now uses persistent articles, AICS-associated WordPress posts, approval queues, automation profiles, and automation runs rather than raw AI usage logs.
+- It contains a welcome header, two primary actions, four product metrics, compact actionable attention items, an automation overview, six bounded recent-content items, and small helpful links.
+- Raw provider/model/request-duration activity and the live Automation Health snapshot were removed only from the Dashboard; their repositories and diagnostic screens remain intact.
+- Dashboard rendering performs no provider calls, health scan, dispatcher, worker, SEO analysis, or schedule calculation. WordPress post caches are primed for recent associated content.
+
+## Content History AJAX search and filtering (2026-08-06)
+
+- Content History remains based on native AICS-associated WordPress posts; temporary articles without a WordPress post remain excluded.
+- `AICS_Content_History_Query_Service` owns normalization and bounded prepared queries for search, WordPress status, site-local creation dates, current post author, reliable article `source_type`, and pagination. Search covers post/article content and stored SEO fields plus exact numeric post/article IDs, without loading full bodies into PHP.
+- Manual Studio and Automation source filtering is enabled because current article records reliably store `source_type` and their WordPress post association. AICS posts without an associated article remain visible as Legacy under All Sources.
+- `assets/js/content-history.js` loads only on Content History and provides debounced authenticated AJAX results, stale-request cancellation, skeleton rows, URL state, pagination, reset, announcements, and browser history restoration. The native GET form and status links remain usable without JavaScript.
+- Filters are read-only: they do not modify articles, posts, SEO, images, runs, or approvals and invoke no providers or automation work.
+
+## Settings navigation consolidation (2026-08-06)
+
+- The visible AI Content Studio submenu is now Dashboard, Create Content, Automations, Approvals, and Settings. Automation Runs, Content History, and System Status are Settings workspace sections rather than visible submenu pages.
+- `AICS_Settings_Section_Registry` is the centralized allowlist for labels, descriptions, capabilities, and controlled render callbacks. Unknown sections fall back to General; inaccessible definitions are neither rendered nor linked.
+- Settings uses a responsive two-column workspace with persistent internal navigation and a bounded content panel. General preserves the existing provider and featured-image forms. The three moved sections reuse their original controllers, repositories, action handlers, AJAX endpoints, diagnostics, and permission checks without copying logic.
+- Old page slugs remain hidden WordPress admin routes and safely redirect to their Settings section while preserving allowlisted run-detail, run-filter, Content History filter, and pagination parameters. Nonces are not forwarded.
+- Content History and System Status JavaScript load on Settings only for their matching section. System diagnostics are therefore not evaluated for unrelated Settings sections.
+
 ## Project Overview
 
 AI Content Studio is a WordPress plugin that helps website owners generate, optimize, manage, and publish content using AI directly inside WordPress.
@@ -1226,3 +1264,24 @@ Current limitations: external links require a reachable trusted URL and a natura
 Current limitations: plugin metadata application, term creation, link recommendation/insertion, external verification, image insertion, automation SEO generation, SEO approval, publishing guards, keyword research, SERP analysis, and rank tracking remain unimplemented. Next task: **V1 Task 2.3 — Internal and External Link Recommendation and Insertion Engine**. It has not begun.
 
 Validation: all plugin PHP files pass syntax validation with the XAMPP PHP CLI, and `git diff --check` reports no whitespace errors. Current limitations: SEO metadata generation/analysis, keyword research, link selection/verification, content-image insertion, SEO approval, adapter metadata reads/writes, and plugin-specific adapters remain unimplemented. The required-image failure/retry acceptance scenario also remains untested. Next task: **V1 Task 2.2 — AI SEO Metadata Generation and Quality Analysis**. It has not begun.
+## Create Content AJAX Wizard Redesign
+
+The Create Content page is now a server-authoritative, single-page Manual Studio wizard with six stages: Context, Ideas, Article, Image, SEO, and Complete. Only the active stage is rendered. The ordered progress stepper remains visible, marks completed/current/pending states in text and visually, permits only server-confirmed revisits, and keeps future steps disabled.
+
+`AICS_Manual_Wizard_State_Service` owns user-scoped context, ideas, selection, active article identity, current allowed step, progress, persistent-article resume, reset, and short operation locks. Browser step names and article identifiers never grant access. Persistent Manual Studio ownership is revalidated through `AICS_Manual_Article_Persistence_Service`; refresh restores the active article without repeating provider work. Start New Content clears only current user workflow pointers/transients and preserves historical articles, WordPress posts, attachments, and metadata.
+
+`AICS_Manual_Studio_Wizard_Controller` exposes one authenticated `wp_ajax_aics_manual_wizard` endpoint with a strict operation allowlist, centralized capability and nonce checks, server-side step validation, controlled messages, and bounded HTML responses. It orchestrates the existing AI engine, Manual article persistence, draft creation, featured-image pipeline, SEO generation/editing, and shared SEO application workflow. No public endpoint, provider duplication, raw provider response, credential, path, SQL error, or trusted browser workflow state was introduced. Provider and persistence operations use per-user/per-operation locks in addition to client-side submission prevention.
+
+The dedicated `manual-studio-wizard.js` bundle loads only on Create Content. It uses `fetch`, `FormData`, `AbortController`, stale-response sequence checks, event delegation, immediate step-specific skeletons, delayed long-operation guidance, focus movement, an aria-live status region, `aria-busy`, and safe step-only history. Back navigation never invokes AI. Controlled failures restore the current server-rendered step and preserve inputs. Skeleton animation is disabled under `prefers-reduced-motion`.
+
+Step flow: Context validates and persists business/topic/tone/length/format plus bounded optional instructions before generating ideas. Ideas supports one selection and explicit regeneration. Article generation persists one owned Manual article; edits save without AI and draft creation reuses the existing association. Changing to a different regenerated idea creates a new persistent Manual article so an older post is never silently repurposed. Image generation reuses the shared idempotent pipeline and supports alt editing or the existing optional-image policy. SEO generation occurs only through an explicit transition when data is absent, supports review/save, and applies through the shared Quality Gate and adapter workflow. Complete renders a safe native summary plus the WordPress-generated same-origin preview URL, Edit Post, Full Preview, optional View Post, and Start New Content.
+
+Upstream revisits do not delete downstream records or automatically call providers. Explicit regeneration replaces only the current transient idea set. A changed idea creates a new article, preserving old downstream records. Existing post/image/SEO ownership and conflict protections remain authoritative. The current product supports draft creation only in Manual Studio, so final publishing remains in the WordPress editor; automation scheduling and publishing are unchanged.
+
+Accessibility/responsive decisions include semantic headings and forms, labelled controls, an ordered progress list, `aria-current="step"`, screen-reader state text, keyboard buttons, visible focus rules inherited from the admin design system, touch-sized controls, an aria-live region, reduced motion, horizontally scrollable progress on narrow screens, stacked fields/actions, relative preview sizing, and bounded iframe height.
+
+Files created: `includes/services/class-manual-wizard-state-service.php`, `includes/admin/class-manual-studio-wizard-controller.php`, `assets/js/manual-studio-wizard.js`, and six templates under `templates/admin/manual-wizard/`. Files modified: `ai-content-studio.php`, `includes/admin/class-content-studio-page.php`, `includes/admin/class-assets.php`, `assets/css/admin.css`, and `AI_CONTEXT.md`.
+
+Known limitations: Manual Studio completion still hands publishing/scheduling to the WordPress editor because no existing Manual publishing service exists. The AJAX experience intentionally requires JavaScript; the no-script state is controlled and preserves existing work. Manual browser, accessibility-technology, slow-network, provider, and cross-browser acceptance testing remains required.
+
+Next task: **Create Content Wizard Manual Acceptance and Usability Testing**. Do not begin the Automations page redesign.

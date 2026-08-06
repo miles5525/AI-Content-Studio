@@ -12,7 +12,7 @@ final class AICS_Automations_Page {
 	private const SAVE_ACTION = 'aics_save_automation_profile';
 	private const NONCE_NAME = 'aics_automation_nonce';
 
-	public static function register(): void { add_action( 'admin_post_' . self::SAVE_ACTION, array( self::class, 'handle_save' ) ); }
+	public static function register(): void { add_action( 'admin_post_' . self::SAVE_ACTION, array( self::class, 'handle_save' ) ); add_action( 'wp_ajax_aics_automation_wizard', array( self::class, 'handle_ajax' ) ); }
 
 	public static function render(): void {
 		self::require_permission();
@@ -22,29 +22,38 @@ final class AICS_Automations_Page {
 		$profile = is_array( $state['data'] ?? null ) ? array_replace_recursive( $stored, $state['data'] ) : $stored;
 		$errors  = is_array( $state['errors'] ?? null ) ? $state['errors'] : array();
 		?>
-		<div class="wrap aics-admin-wrap aics-automations-page">
+		<div class="wrap aics-admin-wrap aics-automations-page aics-automation-wizard" id="aics-automation-wizard" data-current-step="<?php echo empty($stored['id'])?'basics':'review'; ?>">
 			<header class="aics-page-header"><h1 class="aics-page-title"><?php esc_html_e( 'Automations', 'ai-content-studio' ); ?></h1><p class="aics-page-description"><?php esc_html_e( 'Configure the persistent Autopilot or Approval Workflow profile. Approved automated articles are delivered as WordPress drafts; scheduling and publishing remain separate workflow steps.', 'ai-content-studio' ); ?></p></header>
-			<p class="aics-automation-info"><?php esc_html_e( 'Changes apply to new automation cycles. An existing cycle continues with the settings saved when it started.', 'ai-content-studio' ); ?></p>
+			<?php self::render_progress(); ?><div class="aics-wizard-live" aria-live="polite"></div><div class="aics-wizard-notice" role="status"></div><p class="aics-automation-info"><?php esc_html_e( 'Changes apply to new automation cycles. An existing cycle continues with the settings saved when it started.', 'ai-content-studio' ); ?></p>
 			<?php $seo_detection=(new AICS_SEO_Plugin_Detector())->resolve('auto');if(!empty($seo_detection['multiple'])):?><div class="notice notice-warning inline"><p><?php esc_html_e('Multiple supported SEO plugins are active. Auto-detect will use Yoast first, then Rank Math, then All in One SEO; metadata will never be written to more than one plugin.','ai-content-studio');?></p></div><?php endif;?>
 			<p class="aics-actions"><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=aics-automation-runs' ) ); ?>"><?php esc_html_e( 'View Automation Runs', 'ai-content-studio' ); ?></a><a class="button" href="<?php echo esc_url( add_query_arg( array( 'page'=>'aics-automation-runs', 'run_view'=>'needs_attention' ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( 'Review Runs Needing Attention', 'ai-content-studio' ); ?></a></p>
-			<?php self::render_notice(); self::render_errors( $errors ); self::render_summary( $stored ); self::render_schedule_preview( $stored ); ?>
+			<?php self::render_notice(); self::render_errors( $errors ); ?><div class="aics-automation-review" data-aics-auto-step="review"><?php self::render_summary( $stored ); self::render_schedule_preview( $stored ); ?></div>
 			<form class="aics-automation-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
 				<?php wp_nonce_field( self::SAVE_ACTION, self::NONCE_NAME ); ?>
-				<?php self::render_general( $profile ); ?>
-				<?php self::render_business( $profile['business_context'] ); ?>
-				<?php self::render_content( $profile['content_settings'] ); ?>
-				<?php self::render_featured_images( $profile['content_settings']['featured_images'] ?? array() ); ?>
-				<?php self::render_seo( $profile['content_settings']['seo'] ?? array() ); ?>
-				<?php self::render_trusted_sources( $profile['content_settings']['seo'] ?? array() ); ?>
-				<?php self::render_seo_quality_gate( $profile['content_settings']['seo'] ?? array() ); ?>
-				<?php self::render_schedule( $profile['schedule_settings'] ); ?>
-				<?php self::render_approvals( $profile['workflow_rules'], $profile['mode'] ); ?>
-				<?php self::render_publishing( $profile['publishing_settings'] ); ?>
-				<div class="aics-actions aics-automation-save"><?php submit_button( __( 'Save Automation Settings', 'ai-content-studio' ), 'primary aics-button-primary', 'submit', false ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="basics"><?php self::render_general( $profile ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="content"><?php self::render_business( $profile['business_context'] ); self::render_content( $profile['content_settings'] ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="workflow"><?php self::render_approvals( $profile['workflow_rules'], $profile['mode'] ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="schedule"><?php self::render_schedule( $profile['schedule_settings'] ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="image"><?php self::render_featured_images( $profile['content_settings']['featured_images'] ?? array() ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="seo"><?php self::render_seo( $profile['content_settings']['seo'] ?? array() ); self::render_trusted_sources( $profile['content_settings']['seo'] ?? array() ); self::render_seo_quality_gate( $profile['content_settings']['seo'] ?? array() ); ?></div>
+				<div class="aics-automation-stage" data-aics-auto-step="publishing"><?php self::render_publishing( $profile['publishing_settings'] ); ?></div>
+				<div class="aics-wizard-footer"><button type="button" class="button" data-aics-auto-back><?php esc_html_e('Back','ai-content-studio');?></button><button type="submit" class="button button-primary aics-button-primary" data-aics-auto-next><?php esc_html_e('Save and Continue','ai-content-studio');?></button><button type="button" class="button" data-aics-auto-save-inactive><?php esc_html_e('Save Inactive','ai-content-studio');?></button><button type="button" class="button button-primary aics-button-primary" data-aics-auto-activate><?php esc_html_e('Activate Automation','ai-content-studio');?></button><button type="button" class="button" data-aics-auto-deactivate><?php esc_html_e('Deactivate','ai-content-studio');?></button></div>
 			</form>
 		</div>
 		<?php
+	}
+
+	private static function render_progress(): void { $labels=array('basics'=>'Basics','content'=>'Content','workflow'=>'Workflow','schedule'=>'Schedule','image'=>'Image','seo'=>'SEO','publishing'=>'Publishing','review'=>'Review'); ?><nav class="aics-wizard-progress" aria-label="<?php esc_attr_e('Automation setup progress','ai-content-studio');?>"><ol><?php $i=0;foreach($labels as $step=>$label):++$i;?><li class="<?php echo 1===$i?'is-active':'is-pending';?>"><button type="button" data-aics-auto-nav="<?php echo esc_attr($step);?>" <?php disabled(1!==$i);?> <?php echo 1===$i?'aria-current="step"':'';?>><span class="aics-step-marker"><?php echo esc_html((string)$i);?></span><span class="aics-step-label"><?php echo esc_html($label);?></span></button></li><?php endforeach;?></ol></nav><?php }
+
+	public static function handle_ajax(): void {
+		self::require_permission(); check_ajax_referer(self::SAVE_ACTION,self::NONCE_NAME);
+		$steps=array('basics','content','workflow','schedule','image','seo','publishing','review');$step=sanitize_key(wp_unslash($_POST['wizard_step']??'basics'));$intent=sanitize_key(wp_unslash($_POST['wizard_intent']??'next'));
+		if(!in_array($step,$steps,true)||!in_array($intent,array('next','save_inactive','activate','deactivate'),true)){wp_send_json_error(array('message'=>__('Invalid wizard request.','ai-content-studio')),400);}
+		$input=self::request_data();$stored=(new AICS_Automation_Profile_Service())->get_default_profile();
+		if('activate'===$intent){$input['enabled']='1';}elseif(in_array($intent,array('save_inactive','deactivate'),true)){$input['enabled']='0';}elseif('active'===($stored['status']??'')){$input['enabled']='1';}
+		$result=(new AICS_Automation_Profile_Service())->save($input);if(empty($result['success'])){wp_send_json_error(array('message'=>__('Review the configuration values before continuing.','ai-content-studio'),'errors'=>$result['errors']??array()),422);}
+		$profile=(new AICS_Automation_Profile_Service())->get_default_profile();ob_start();self::render_summary($profile);self::render_schedule_preview($profile);$review=ob_get_clean();wp_send_json_success(array('step'=>$step,'profile_id'=>absint($profile['id']??0),'status'=>$profile['status']??'disabled','review_html'=>$review,'notice'=>__('Automation settings saved.','ai-content-studio')));
 	}
 
 	public static function handle_save(): void {
