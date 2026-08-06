@@ -12,6 +12,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 wp_clear_scheduled_hook( 'aics_automation_dispatcher' );
 wp_clear_scheduled_hook( 'aics_automation_worker' );
 wp_clear_scheduled_hook( 'aics_automation_health_check' );
+wp_clear_scheduled_hook( 'aics_cleanup_usage_logs' );
 delete_option( 'aics_automation_dispatcher_lock' );
 delete_option( 'aics_automation_health_scan_lock' );
 

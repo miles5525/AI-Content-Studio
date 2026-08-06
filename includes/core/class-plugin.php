@@ -47,6 +47,7 @@ final class Plugin {
 		\AICS_Automation_Scheduler::register();
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 		add_action( 'init', array( 'AIContentStudio\\Database\\Installer', 'maybe_upgrade' ) );
+		add_action( 'admin_init', array( Privacy::class, 'add_policy_content' ) );
 		add_action( 'aics_cleanup_usage_logs', array( 'AICS_Usage_Logger', 'cleanup' ) );
 
 		if ( ! wp_next_scheduled( 'aics_cleanup_usage_logs' ) ) {

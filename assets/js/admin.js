@@ -60,6 +60,10 @@
 		var title = form.querySelector( '[name="article_title"]' );
 		var excerpt = form.querySelector( '[name="article_excerpt"]' );
 		var editorTextarea = form.querySelector( '[name="article_content"]' );
+
+		if ( ! title || ! excerpt || ! editorTextarea ) {
+			return;
+		}
 		var initialTitle = title.value;
 		var initialExcerpt = excerpt.value;
 		var initialContent = editorTextarea.value;
@@ -121,8 +125,10 @@
 		var mode = form.querySelector( '[name="mode"]' );
 		var frequency = form.querySelector( '[name="schedule_settings[frequency]"]' );
 		var publishingMode = form.querySelector( '[name="publishing_settings[publishing_mode]"]' );
-		var approvalSection = form.querySelector( '#aics-approval-heading' ).closest( '.aics-section' );
-		var publishingDays = form.querySelector( '[name="schedule_settings[days_of_week][]"]' ).closest( '.aics-field' );
+		var approvalHeading = form.querySelector( '#aics-approval-heading' );
+		var publishingDayInput = form.querySelector( '[name="schedule_settings[days_of_week][]"]' );
+		var approvalSection = approvalHeading ? approvalHeading.closest( '.aics-section' ) : null;
+		var publishingDays = publishingDayInput ? publishingDayInput.closest( '.aics-field' ) : null;
 		var monthlyDay = form.querySelector( '.aics-monthly-day-field' );
 		var warning = form.querySelector( '.aics-publish-warning' );
 		var imageSource = form.querySelector( '[name="featured_image_settings[settings_source]"]' );
@@ -130,19 +136,19 @@
 		var globalImageSummary = form.querySelector( '.aics-global-image-summary' );
 
 		function refreshConditionalFields() {
-			approvalSection.hidden = 'approval' !== mode.value;
-			publishingDays.hidden = 'weekly' !== frequency.value;
-			monthlyDay.hidden = 'monthly' !== frequency.value;
-			warning.hidden = 'publish' !== publishingMode.value;
+			if ( approvalSection && mode ) { approvalSection.hidden = 'approval' !== mode.value; }
+			if ( publishingDays && frequency ) { publishingDays.hidden = 'weekly' !== frequency.value; }
+			if ( monthlyDay && frequency ) { monthlyDay.hidden = 'monthly' !== frequency.value; }
+			if ( warning && publishingMode ) { warning.hidden = 'publish' !== publishingMode.value; }
 			if ( imageSource && imageOverrides ) {
 				imageOverrides.hidden = 'override' !== imageSource.value;
 				globalImageSummary.hidden = 'global' !== imageSource.value;
 			}
 		}
 
-		mode.addEventListener( 'change', refreshConditionalFields );
-		frequency.addEventListener( 'change', refreshConditionalFields );
-		publishingMode.addEventListener( 'change', refreshConditionalFields );
+		if ( mode ) { mode.addEventListener( 'change', refreshConditionalFields ); }
+		if ( frequency ) { frequency.addEventListener( 'change', refreshConditionalFields ); }
+		if ( publishingMode ) { publishingMode.addEventListener( 'change', refreshConditionalFields ); }
 		if ( imageSource ) { imageSource.addEventListener( 'change', refreshConditionalFields ); }
 		refreshConditionalFields();
 

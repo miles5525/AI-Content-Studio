@@ -3,7 +3,7 @@
  * Plugin Name:       AI Content Studio
  * Plugin URI:        https://github.com/miles5525/AI-Content-Studio
  * Description:       Generate, review, and manage AI-assisted WordPress content.
- * Version:           0.9.0
+ * Version:           0.9.1
  * Requires at least: 6.4
  * Requires PHP:      8.0
  * Author:            AI Content Studio
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'AICS_VERSION', '0.9.0' );
+define( 'AICS_VERSION', '0.9.1' );
 define( 'AICS_DB_VERSION', '0.13.0' );
 define( 'AICS_MINIMUM_PHP_VERSION', '8.0' );
 define( 'AICS_MINIMUM_WP_VERSION', '6.4' );
@@ -28,6 +28,7 @@ define( 'AICS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AICS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
 require_once AICS_PLUGIN_DIR . 'includes/core/class-permissions.php';
+require_once AICS_PLUGIN_DIR . 'includes/core/class-privacy.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-installer.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-usage-log-repository.php';
 require_once AICS_PLUGIN_DIR . 'includes/database/class-automation-profile-repository.php';

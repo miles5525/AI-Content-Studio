@@ -1,29 +1,29 @@
 # AI Content Studio
 
-AI Content Studio is a private-beta WordPress plugin for generating blog ideas and articles with OpenAI, reviewing temporary drafts, creating native WordPress drafts, and monitoring recent usage.
+AI Content Studio generates, reviews, and manages AI-assisted WordPress content. It supports manual content creation, automation profiles and approvals, WordPress draft delivery, featured images, SEO metadata, operational history, and system diagnostics.
 
 ## Requirements
 
 - WordPress 6.4 or newer
 - PHP 8.0 or newer
+- An OpenAI API key for AI generation features
 
 ## Installation
 
 1. Copy the plugin directory into `wp-content/plugins/`.
 2. Activate **AI Content Studio** from **Plugins > Installed Plugins**.
-3. Open **AI Content Studio** in the WordPress administration menu.
+3. Open **AI Content Studio > Settings** and review the external-service notice before entering an API key.
 
-## Development status
+## External service
 
-Version `0.9.0` provides OpenAI settings and connection testing, Content Studio generation workflows, native draft creation, Content History, usage summaries, retention cleanup, and safe System Status diagnostics. Automatic publishing, SEO, images, social-media features, billing, and additional providers are not included.
+The plugin connects to OpenAI only when an administrator requests a generation or connection test, or enables an automation that performs generation. It sends the instructions and relevant content needed for the request, plus the configured API key for authentication.
 
-## Admin pages
+- [OpenAI Terms of Use](https://openai.com/policies/terms-of-use/)
+- [OpenAI Privacy Policy](https://openai.com/policies/privacy-policy/)
 
-- Dashboard
-- Create Content
-- Content History
-- Settings
-- System Status
+## Data and removal
+
+Deactivation stops scheduled tasks but preserves settings and generated records. Uninstall removes scheduler locks and scheduled events but intentionally preserves generated content, settings, and audit records so site content is not deleted unexpectedly.
 
 ## License
 
