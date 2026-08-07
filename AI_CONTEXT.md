@@ -1,5 +1,11 @@
 # AI Content Studio — AI Development Context
 
+## Manual SEO Rank Math and AIOSEO Reliability Fix (2026-08-06)
+
+Manual Studio SEO reapplication no longer attempts to save/regenerate an already-applied SEO record before invoking the idempotent application workflow. This removes the misleading `seo_regeneration_not_allowed` path that previously surfaced as the generic “SEO generation or validation failed” message.
+
+AIOSEO 5 integration now writes and reads its dedicated `focus_keyword` model field while retaining the supported legacy `keyphrases` structure. Read-back accepts decoded objects, arrays, or JSON strings and normalizes slashes, entities, and whitespace consistently before verification. Manual generation/validation failures now map controlled error codes to actionable messages instead of collapsing provider, missing-field, and invalid-field failures into one generic notice. Rank Math continues using normalized post-meta verification and its comma-separated focus-keyword compatibility rule.
+
 ## First-Run Setup Wizard (2026-08-06)
 
 AI Content Studio includes a hidden, focused `admin.php?page=aics-setup` onboarding route and a visible **Getting Started** section inside Settings. The six server-authoritative stages are Welcome, AI Provider, Featured Images, SEO Integration, Content Defaults, and Finish. The implementation reuses existing OpenAI credential/model storage and connection testing, featured-image settings/provider capabilities, SEO detection/target labels, shared admin wizard styling, skeletons, accessibility rules, and authenticated AJAX patterns.
