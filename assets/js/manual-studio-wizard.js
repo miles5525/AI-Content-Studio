@@ -74,7 +74,8 @@
 	} );
 	root.addEventListener( 'click', function ( event ) {
 		var step = event.target.closest( '[data-aics-step]' ); if ( step ) { var d = new FormData(); d.set( 'step', step.dataset.aicsStep ); request( 'navigate', d, false ); return; }
-		var action = event.target.closest( '[data-aics-operation]' ); if ( action ) { request( action.dataset.aicsOperation, new FormData(), true ); return; }
+		var refreshPrompt = event.target.closest( '[data-aics-refresh-image-prompt]' ); if ( refreshPrompt ) { var prompt = root.querySelector( '[name="featured_image_prompt"]' ); if ( prompt && prompt.value !== prompt.defaultValue && ! window.confirm( 'Replace your edited prompt with a fresh prompt built from the current article?' ) ) { return; } request( 'refresh_image_prompt', new FormData(), false ); return; }
+		var action = event.target.closest( '[data-aics-operation]' ); if ( action && ! action.form ) { request( action.dataset.aicsOperation, new FormData(), true ); return; }
 		var regenerate = event.target.closest( '[data-aics-regenerate="ideas"]' ); if ( regenerate && window.confirm( 'Regenerate ideas? The current idea set will be replaced. Existing persistent articles and posts will remain unchanged.' ) ) { request( 'regenerate_ideas', new FormData(), true ); return; }
 		var reset = event.target.closest( '[data-aics-reset]' ); if ( reset && window.confirm( 'Start new content? Existing persistent articles and WordPress posts will be preserved.' ) ) { request( 'reset', new FormData(), false ); }
 	} );

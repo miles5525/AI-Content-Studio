@@ -83,7 +83,7 @@ final class Admin_Menu {
 	public function render_settings(): void { \AICS_Settings_Page::render(); }
 	public function render_system_status(): void { \AICS_System_Status_Page::render(); }
 	public function render_setup(): void { \AICS_Setup_Wizard_Page::render(); }
-	public function redirect_automation_runs():void{$this->redirect_legacy('automation-runs',array('view','run_id','run_view','paged','status','current_step'));}
+	public function redirect_automation_runs():void{$this->redirect_legacy('automation-runs',array('view','run_id','run_view','paged','status','step','trigger','profile_id','date_range','aics_run_notice'));}
 	public function redirect_content_history():void{$this->redirect_legacy('content-history',array('content_search','content_status','content_author','date_from','date_to','content_source','paged'));}
 	public function redirect_system_status():void{$this->redirect_legacy('system-status',array());}
 	private function redirect_legacy(string $section,array $allowed):void{if(!current_user_can(Permissions::manage())){wp_die(esc_html__('You do not have permission to access this page.','ai-content-studio'));}$args=array('page'=>'aics-settings','section'=>$section);foreach($allowed as $key){if(isset($_GET[$key])&&is_scalar($_GET[$key])){$args[$key]=sanitize_text_field(wp_unslash((string)$_GET[$key]));}}wp_safe_redirect(add_query_arg($args,admin_url('admin.php')));exit;}

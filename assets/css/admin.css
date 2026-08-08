@@ -28,6 +28,17 @@
 
 /* First-run setup reuses shared controls and keeps narrow-screen overflow local. */
 .aics-setup-page,.aics-setup-page .aics-wizard-shell{max-width:1040px}.aics-setup-page .aics-wizard-card,.aics-settings-embedded .aics-wizard-card{padding:32px}.aics-setup-form>label{display:flex;flex-direction:column;gap:8px;margin:18px 0}.aics-setup-form select,.aics-setup-form input[type="password"]{width:100%;max-width:100%;min-height:46px}.aics-setup-ready{padding:12px 16px;background:#e8f7ec;color:#176b35;border-radius:8px}.aics-setup-warning{padding:12px 16px;background:#fff5e8;color:#8a4b08;border-left:3px solid #e97918}.aics-setup-status-card{padding:18px;background:#eef5ff;border:1px solid #b8d4ff;border-radius:8px;margin:18px 0}.aics-setup-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0}.aics-setup-summary>div{display:flex;flex-direction:column;gap:8px;padding:18px;border:1px solid #b8d4ff;border-radius:8px;background:#f7faff}.aics-setup-finish-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.aics-setup-banner{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;margin-bottom:20px}.aics-setup-banner p{margin:6px 0 0}.aics-setup-banner>div:last-child{display:flex;gap:10px;align-items:center}.aics-setup-banner form{margin:0}.aics-settings-embedded #aics-setup-wizard{max-width:100%;overflow:hidden}@media(max-width:782px){.aics-setup-summary{grid-template-columns:1fr}.aics-setup-banner{align-items:flex-start;flex-direction:column}.aics-setup-page .aics-wizard-card,.aics-settings-embedded .aics-wizard-card{padding:20px}.aics-wizard-progress-wrap{overflow-x:auto;max-width:100%}}
+.aics-setup-page .aics-wizard-card,.aics-settings-embedded #aics-setup-wizard .aics-wizard-card{padding:clamp(30px,4vw,44px) clamp(26px,5vw,48px)}
+.aics-setup-form{display:flex;flex-direction:column;gap:18px;min-width:0}
+.aics-setup-form>*{margin-top:0;margin-bottom:0}
+.aics-setup-form>label,.aics-setup-form .aics-field-grid>label{display:flex;flex-direction:column;gap:8px;margin:0;min-width:0}
+.aics-setup-form .aics-field-grid{gap:18px 20px;margin:0;min-width:0}
+.aics-setup-form .aics-field-grid>label+label{margin-top:18px}
+.aics-setup-form>.button{align-self:flex-start}
+.aics-setup-form>.description{margin:0;color:var(--aics-text-muted);line-height:1.55}
+.aics-setup-form>ul{margin:0 0 0 22px}
+.aics-setup-form .aics-wizard-actions{margin-top:6px;padding-top:20px}
+@media(max-width:782px){.aics-setup-page .aics-wizard-card,.aics-settings-embedded #aics-setup-wizard .aics-wizard-card{padding:24px 20px}.aics-setup-form{gap:16px}.aics-setup-form .aics-field-grid{gap:16px}.aics-setup-form .aics-field-grid>label+label{margin-top:16px}.aics-setup-form .aics-wizard-actions{margin-top:4px}}
 
 .aics-admin-wrap *, .aics-admin-wrap *::before, .aics-admin-wrap *::after { box-sizing: border-box; }
 .aics-admin-wrap { line-height: 1.5; }
@@ -92,6 +103,10 @@
 .aics-history-status--private { background: #f0f0f1; color: #50575e; }
 .aics-remove-key-form, .aics-connection-actions { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--aics-border); }
 .aics-connection-actions .description { margin: 0 0 10px; }
+.aics-provider-action-help { margin: 16px 0 8px; }
+.aics-provider-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.aics-provider-actions form, .aics-provider-actions .aics-remove-key-form { margin: 0; padding: 0; border: 0; }
+.aics-provider-actions .button { min-height: 32px; margin: 0; }
 
 .aics-content-studio-page > form:not(.aics-reset-workflow-form), .aics-content-studio-page section { max-width: 940px; }
 .aics-content-section, .aics-blog-ideas-section, .aics-article-section { margin-top: 20px; padding: 20px 24px; }
@@ -165,8 +180,8 @@
 .aics-settings-embedded .aics-runs-table th,.aics-settings-embedded .aics-runs-table td,.aics-settings-embedded .aics-history-table th,.aics-settings-embedded .aics-history-table td{width:auto!important;padding:9px 7px;overflow-wrap:anywhere;word-break:normal;white-space:normal}
 .aics-settings-embedded .aics-runs-table{font-size:12px}
 .aics-settings-embedded .aics-runs-table .button,.aics-settings-embedded .aics-history-table .button{width:100%;min-width:0;padding-right:8px;padding-left:8px;white-space:normal}
-.aics-settings-embedded .aics-history-toolbar{grid-template-columns:minmax(0,2fr) repeat(2,minmax(125px,1fr));width:100%;max-width:100%}
-.aics-settings-embedded .aics-history-toolbar .aics-history-search{grid-column:1/-1}
+.aics-settings-embedded .aics-history-toolbar{grid-template-columns:minmax(260px,2fr) repeat(5,minmax(0,1fr));width:100%;max-width:100%}
+.aics-settings-embedded .aics-history-toolbar .aics-history-search{grid-column:auto}
 .aics-settings-embedded .aics-history-toolbar>div,.aics-settings-embedded .aics-history-toolbar input,.aics-settings-embedded .aics-history-toolbar select{min-width:0;max-width:100%}
 .aics-settings-embedded .aics-history-toolbar>.button{width:100%;min-width:0}
 
@@ -181,7 +196,8 @@
 .aics-approvals-page{width:calc(100% - 20px);max-width:1180px}
 .aics-approvals-page .aics-summary-grid,.aics-approvals-page .aics-approval-tabs,.aics-approvals-page .aics-empty-state,.aics-approvals-page .aics-table-wrap,.aics-approvals-page .aics-approval-review{width:100%;max-width:none}
 
-@media(max-width:782px){.aics-settings-embedded .aics-history-toolbar{grid-template-columns:1fr}.aics-settings-embedded .aics-runs-table,.aics-settings-embedded .aics-history-table{font-size:11px}.aics-content-studio-page .aics-wizard-toolbar{flex-direction:column}.aics-content-studio-page .aics-wizard-toolbar [data-aics-reset]{width:100%;margin-left:0}}
+@media(max-width:1199px){.aics-settings-embedded .aics-history-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.aics-settings-embedded .aics-history-toolbar .aics-history-search{grid-column:span 2}}
+@media(max-width:782px){.aics-settings-embedded .aics-history-toolbar{grid-template-columns:1fr}.aics-settings-embedded .aics-history-toolbar .aics-history-search{grid-column:auto}.aics-settings-embedded .aics-runs-table,.aics-settings-embedded .aics-history-table{font-size:11px}.aics-content-studio-page .aics-wizard-toolbar{flex-direction:column}.aics-content-studio-page .aics-wizard-toolbar [data-aics-reset]{width:100%;margin-left:0}}
 
 .aics-automation-wizard .aics-automation-review>section{width:100%;max-width:none}
 .aics-content-studio-page .aics-wizard-actions [data-aics-reset]{margin-right:auto}
@@ -412,4 +428,35 @@
 .aics-automation-wizard [data-aics-auto-step].is-loading{position:relative;min-height:220px;overflow:hidden;opacity:.48;pointer-events:none}
 .aics-automation-wizard [data-aics-auto-step].is-loading:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(220,226,234,.8),transparent);animation:aics-skeleton 1.2s infinite}
 .aics-automation-wizard .aics-wizard-notice:not(:empty){margin-top:12px;padding:10px 14px;border-left:4px solid #2764eb;background:#eef5ff;color:#1d2b45}
-@media(max-width:782px){.aics-automation-wizard .aics-wizard-progress{overflow-x:auto}.aics-automation-wizard .aics-wizard-footer .button{width:100%}}
+.aics-automation-wizard .aics-wizard-notice.is-error{border-left-color:#d63638;background:#fcf0f1;color:#8a2424}
+.aics-review-heading{margin:20px 0 14px}.aics-review-heading h2{margin:0 0 6px;font-size:24px;color:var(--aics-text)}.aics-review-heading p{margin:0;color:var(--aics-text-muted)}
+.aics-automation-review-card{max-width:900px!important}.aics-review-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 28px}.aics-review-groups h4{margin:0 0 8px;color:var(--aics-primary-hover);font-size:14px}.aics-review-groups dl{margin:0}.aics-review-groups dl>div{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--aics-border)}.aics-review-groups dt{color:var(--aics-text-muted)}.aics-review-groups dd{margin:0;text-align:right;font-weight:600}.aics-review-chip{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--aics-primary-soft);color:var(--aics-primary-hover);font-size:12px}
+.aics-activation-modal{position:fixed;z-index:100100;inset:0;display:grid;place-items:center;padding:20px}.aics-activation-modal[hidden]{display:none}.aics-activation-modal__backdrop{position:absolute;inset:0;background:rgba(15,31,54,.58)}.aics-activation-modal__dialog{position:relative;width:min(460px,100%);padding:30px;border-radius:var(--aics-radius-large);background:#fff;box-shadow:0 24px 70px rgba(15,31,54,.3);text-align:center}.aics-activation-modal__close{position:absolute;top:10px;right:12px;width:36px;height:36px;border:0;background:transparent;color:var(--aics-text-muted);font-size:28px;cursor:pointer}.aics-activation-modal__icon{display:grid;place-items:center;width:52px;height:52px;margin:0 auto 14px;border-radius:50%;background:#e5f6ea;color:#16833b;font-size:28px;font-weight:700}.aics-activation-modal__dialog h2{margin:0 0 8px;color:var(--aics-primary-hover)}.aics-activation-modal__dialog>p{color:var(--aics-text-muted)}.aics-activation-modal__dialog dl{margin:20px 0;text-align:left}.aics-activation-modal__dialog dl>div{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--aics-border)}.aics-activation-modal__dialog dd{margin:0;text-align:right;font-weight:600}.aics-activation-modal__actions{display:flex;justify-content:center;gap:10px;margin-bottom:12px}
+@media(max-width:782px){.aics-automation-wizard .aics-wizard-progress{overflow-x:auto}.aics-automation-wizard .aics-wizard-footer .button{width:100%}.aics-review-groups{grid-template-columns:1fr}.aics-activation-modal__actions{flex-direction:column}.aics-activation-modal__actions .button{width:100%}}
+
+/* Automation Runs favors a wide data table while keeping overflow inside its table container. */
+.aics-settings-page:has(.aics-runs-page),.aics-settings-page:has(.aics-content-history-page){max-width:1600px}
+.aics-settings-embedded .aics-runs-page .aics-dashboard-cards{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.aics-settings-embedded .aics-runs-page .aics-dashboard-card{min-height:96px;padding:14px 16px}
+.aics-settings-embedded .aics-runs-page .aics-table-wrap{width:100%;max-width:100%;overflow-x:auto}
+.aics-settings-embedded .aics-runs-page .aics-runs-table{width:100%;min-width:1180px!important;table-layout:auto}
+.aics-settings-embedded .aics-runs-page .aics-runs-table th{white-space:nowrap}
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(1),
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(2),
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(3),
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(4),
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(5),
+.aics-settings-embedded .aics-runs-page .aics-runs-table td:nth-child(10){white-space:nowrap;overflow-wrap:normal}
+.aics-settings-embedded .aics-runs-page .aics-runs-table .button{width:auto;min-width:110px;padding:6px 12px;white-space:nowrap}
+@media(max-width:1199px){.aics-settings-embedded .aics-runs-page .aics-dashboard-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:782px){.aics-settings-embedded .aics-runs-page .aics-dashboard-cards{grid-template-columns:1fr}.aics-settings-embedded .aics-runs-page .aics-runs-table{font-size:11px}}
+
+/* Content History reserves space for readable titles and compacts metadata columns. */
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td){padding:10px 5px}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(1){width:34%!important;padding-right:12px;padding-left:12px}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(2){width:9%!important}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(3){width:12%!important}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(4){width:17%!important}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(5){width:8%!important}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(6){width:13%!important}
+.aics-settings-embedded .aics-content-history-page .aics-history-table :is(th,td):nth-child(7){width:7%!important}

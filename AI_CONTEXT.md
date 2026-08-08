@@ -1,5 +1,7 @@
 # AI Content Studio — AI Development Context
 
+Automation Review step simplified and activation confirmation modal added.
+
 ## Manual SEO Rank Math and AIOSEO Reliability Fix (2026-08-06)
 
 Manual Studio SEO reapplication no longer attempts to save/regenerate an already-applied SEO record before invoking the idempotent application workflow. This removes the misleading `seo_regeneration_not_allowed` path that previously surfaced as the generic “SEO generation or validation failed” message.
@@ -198,6 +200,7 @@ Main architecture areas:
 * Content generation
 * SEO generation
 * Image generation
+
 * WordPress publishing
 * Content history
 * Usage tracking
@@ -1291,3 +1294,15 @@ Files created: `includes/services/class-manual-wizard-state-service.php`, `inclu
 Known limitations: Manual Studio completion still hands publishing/scheduling to the WordPress editor because no existing Manual publishing service exists. The AJAX experience intentionally requires JavaScript; the no-script state is controlled and preserves existing work. Manual browser, accessibility-technology, slow-network, provider, and cross-browser acceptance testing remains required.
 
 Next task: **Create Content Wizard Manual Acceptance and Usability Testing**. Do not begin the Automations page redesign.
+
+## Manual Studio SEO state reconciliation (2026-08-07)
+
+The SEO Apply button was dispatched twice: its generic click handler removed the form and sent an empty payload before the submit handler could send the reviewed fields. Apply now uses the form submit path, always saves and reanalyzes current reviewed metadata before applying, and successful persistence clears obsolete generation errors. Manual application treats the readiness threshold as guidance while retaining core metadata, deterministic blocker, application, and adapter checks. Provider-empty keywords fall back to the saved SEO keyword, the article-associated `_aics_primary_keyword`, the current article's selected idea, then its topic context. A failed regeneration preserves valid saved metadata with zero deterministic blockers instead of replacing its usable state with a generation failure.
+
+Changed files: `assets/js/manual-studio-wizard.js`, `includes/admin/class-manual-studio-wizard-controller.php`, `includes/services/class-manual-seo-service.php`, `includes/services/class-manual-seo-application-service.php`, and `includes/seo/class-seo-generation-service.php`.
+
+## Article-aware featured-image prompts (2026-08-07)
+
+Manual Studio and Automations now use the shared deterministic featured-image prompt builder with the article title, meaningful saved or derived excerpt, primary topic, available SEO focus keyword, and Featured Image Instructions. Manual Studio displays the final prompt for editing, saving, and explicit refresh before generation. Autopilot persists the generated prompt automatically; existing article approval exposes it for editing and saves the reviewed value on approval. The existing article `featured_image_prompt` field is reused, and generation/retry passes that exact saved prompt to the provider without rebuilding it.
+
+Changed files: `includes/services/class-featured-image-prompt-builder.php`, `class-featured-image-generation-service.php`, `class-featured-image-pipeline-service.php`, `class-manual-featured-image-service.php`, `class-automation-featured-image-service.php`, `class-automation-worker.php`, `class-approval-workflow-service.php`, `includes/database/class-article-repository.php`, `includes/admin/class-manual-studio-wizard-controller.php`, `class-approvals-page.php`, `templates/admin/manual-wizard/step-image.php`, `assets/js/manual-studio-wizard.js`, and `AI_CONTEXT.md`.

@@ -19,6 +19,7 @@ final class AICS_Automation_Featured_Image_Service {
 		$candidate=null;
 		foreach(array('pending','uploaded','retrying','generating') as $state){foreach($articles as $article){if('rejected'!==$article['status']&&$state===$article['featured_image_status']){$candidate=$article;break 2;}}}
 		if($candidate){
+			if(''===trim((string)($candidate['featured_image_prompt']??''))){$prepared=$this->prepare_prompt($candidate,$configuration);if(empty($prepared['success'])){return $this->failure($prepared['code'],false,$candidate['id']);}$candidate=$this->articles->get_by_id($candidate['id']);}
 			if('generating'===$candidate['featured_image_status']){$changed=$this->articles->record_featured_image_error($candidate['id'],'generating','retrying','image_provider_request_failed');if(empty($changed['success'])){return $this->failure('featured_image_state_changed',true,$candidate['id']);}}
 			$result=$this->pipeline->run($candidate['id'],0,true,$image);
 			if(!empty($result['success'])){return array('success'=>true,'complete'=>false,'code'=>$result['code'],'article_id'=>$candidate['id'],'retryable'=>false);}
@@ -29,6 +30,17 @@ final class AICS_Automation_Featured_Image_Service {
 		}
 		foreach($articles as $article){if('rejected'===$article['status']){continue;}$state=$article['featured_image_status'];if('attached'===$state){$owned=$this->ownership->validate_attachment(absint($article['featured_image_attachment_id']),$article);if(empty($owned['success'])||absint(get_post_thumbnail_id($article['wordpress_post_id']))!==absint($article['featured_image_attachment_id'])){return $this->failure('featured_image_ownership_conflict',false,$article['id']);}continue;}if(!$image['required']&&in_array($state,array('failed','needs_attention','skipped'),true)){continue;}return $this->failure($image['required']?'required_featured_image_failed':'featured_image_state_changed',false,$article['id']);}
 		return array('success'=>true,'complete'=>true,'code'=>'featured_images_complete','article_id'=>0,'retryable'=>false);
+	}
+
+	public function prepare_prompt(array $article,array $configuration):array{
+		$image=AICS_Automation_Featured_Image_Settings::validate(is_array($configuration['featured_image_settings']??null)?$configuration['featured_image_settings']:array());
+		if(is_wp_error($image)){return array('success'=>false,'code'=>'featured_image_configuration_invalid');}
+		if(empty($image['enabled'])){return array('success'=>true,'code'=>'featured_images_disabled');}
+		if(''!==trim((string)($article['featured_image_prompt']??''))){return array('success'=>true,'code'=>'featured_image_prompt_exists');}
+		$idea=(new AICS_Content_Idea_Repository())->get_by_id(absint($article['idea_id']??0));$content=is_array($configuration['content_settings']??null)?$configuration['content_settings']:array();
+		$prompt=(new AICS_Featured_Image_Prompt_Builder())->build(array('title'=>$article['title'],'excerpt'=>$article['excerpt'],'content'=>$article['content'],'primary_keyword'=>$idea['primary_keyword']??'','seo_focus_keyword'=>$article['seo_focus_keyword']??'','featured_image_instructions'=>$content['featured_image_instructions']??'','aspect_ratio'=>$image['aspect_ratio'],'visual_style'=>$image['visual_style']));
+		if(is_wp_error($prompt)){return array('success'=>false,'code'=>$prompt->get_error_code());}
+		return $this->articles->update_featured_image_prompt($article['id'],$prompt,0);
 	}
 
 	public function delivery_allowed(array $article,array $image):array{

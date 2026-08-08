@@ -375,6 +375,15 @@ final class AICS_Article_Repository {
 		$fields=array('featured_image_required','featured_image_status','featured_image_attachment_id','featured_image_prompt','featured_image_alt_text','featured_image_provider','featured_image_model','featured_image_attempts','featured_image_generated_at','featured_image_uploaded_at','featured_image_attached_at','featured_image_last_error_code');return array_intersect_key($article,array_fill_keys($fields,true));
 	}
 
+	/** Persists the one final article-specific prompt without changing image lifecycle state. */
+	public function update_featured_image_prompt( $article_id, $prompt, $updated_by = 0 ): array {
+		global $wpdb;
+		$id=absint($article_id);$article=$this->get_by_id($id);$clean=AICS_Featured_Image_Prompt_Builder::sanitize_final_prompt($prompt);
+		if(!$article){return self::simple(false,0,'article_not_found');}if(is_wp_error($clean)){return self::simple(false,$id,'invalid_image_prompt');}
+		$changed=$wpdb->update($this->table(),array('featured_image_prompt'=>$clean,'updated_by'=>absint($updated_by),'updated_at'=>self::now()),array('id'=>$id),array('%s','%d','%s'),array('%d'));
+		return false===$changed?self::simple(false,$id,'database_update_failed'):self::simple(true,$id,'featured_image_prompt_updated');
+	}
+
 	/** Initializes the image lifecycle once without generating or uploading an image. */
 	public function initialize_featured_image( $article_id, array $image_data ): array {
 		global $wpdb;

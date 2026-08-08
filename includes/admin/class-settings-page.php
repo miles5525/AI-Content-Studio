@@ -49,17 +49,13 @@ final class AICS_Settings_Page {
 
 		$model          = AICS_Settings::get_openai_model();
 		$key_configured = AICS_Settings::has_openai_api_key();
-		$image_settings = AICS_Featured_Image_Settings::get_effective();
-		$image_provider = AICS_Image_Provider_Factory::create( $image_settings['provider'] );
-		$image_capabilities = is_wp_error( $image_provider ) ? array() : $image_provider->get_capabilities();
-		$image_status = AICS_Featured_Image_Settings::configuration_status();
 		?>
 		<div class="wrap aics-admin-wrap aics-settings-page">
 			<header class="aics-page-header">
 				<h1 class="aics-page-title"><?php esc_html_e( 'AI Content Studio Settings', 'ai-content-studio' ); ?></h1>
 				<p class="aics-page-description"><?php esc_html_e( 'Configure the AI provider and verify the saved connection securely.', 'ai-content-studio' ); ?></p>
 			</header>
-			<div class="aics-settings-layout"><?php self::render_section_navigation('general');?><main class="aics-settings-panel"><header class="aics-settings-panel-header"><h2><?php esc_html_e('General','ai-content-studio');?></h2><p><?php esc_html_e('Configure AI providers, featured images, and plugin defaults.','ai-content-studio');?></p></header><?php self::render_notice(); ?>
+			<div class="aics-settings-layout"><?php self::render_section_navigation('general');?><main class="aics-settings-panel"><header class="aics-settings-panel-header"><h2><?php esc_html_e('General','ai-content-studio');?></h2><p><?php esc_html_e('Configure the AI provider and connection used by AI Content Studio.','ai-content-studio');?></p></header><?php self::render_notice(); ?>
 
 			<div class="aics-settings-section">
 				<h2><?php esc_html_e( 'AI Provider Configuration', 'ai-content-studio' ); ?></h2>
@@ -72,7 +68,7 @@ final class AICS_Settings_Page {
 					<?php echo esc_html( $key_configured ? __( 'API key configured', 'ai-content-studio' ) : __( 'No API key configured', 'ai-content-studio' ) ); ?>
 				</p>
 
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<form id="aics-provider-settings-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_ACTION ); ?>">
 					<?php wp_nonce_field( self::SAVE_ACTION, 'aics_settings_nonce' ); ?>
 
@@ -96,19 +92,17 @@ final class AICS_Settings_Page {
 							</td>
 						</tr>
 					</table>
-
-					<?php submit_button( __( 'Save Settings', 'ai-content-studio' ) ); ?>
 				</form>
 
+				<?php if ( $key_configured ) : ?><p class="description aics-provider-action-help"><?php esc_html_e( 'The connection test uses the currently saved API key and selected model. Save changes before testing.', 'ai-content-studio' ); ?></p><?php endif; ?>
+				<div class="aics-provider-actions">
+					<button type="submit" form="aics-provider-settings-form" class="button button-primary aics-button-primary"><?php esc_html_e( 'Save Settings', 'ai-content-studio' ); ?></button>
 				<?php if ( $key_configured ) : ?>
-					<div class="aics-connection-actions">
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 							<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_ACTION ); ?>">
 							<?php wp_nonce_field( self::TEST_ACTION, 'aics_test_connection_nonce' ); ?>
-							<p class="description"><?php esc_html_e( 'The connection test uses the currently saved API key and selected model. Save changes before testing.', 'ai-content-studio' ); ?></p>
 							<?php submit_button( __( 'Test Connection', 'ai-content-studio' ), 'secondary', 'submit', false ); ?>
 						</form>
-					</div>
 
 					<form class="aics-remove-key-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-aics-confirm="<?php echo esc_attr__( 'Are you sure you want to remove the saved API key?', 'ai-content-studio' ); ?>">
 						<input type="hidden" name="action" value="<?php echo esc_attr( self::REMOVE_ACTION ); ?>">
@@ -116,47 +110,6 @@ final class AICS_Settings_Page {
 						<?php submit_button( __( 'Remove API Key', 'ai-content-studio' ), 'secondary', 'submit', false ); ?>
 					</form>
 				<?php endif; ?>
-			</div>
-
-			<div class="aics-settings-section">
-				<h2><?php esc_html_e( 'Featured Images', 'ai-content-studio' ); ?></h2>
-				<p class="aics-api-key-status <?php echo $image_status['success'] ? 'aics-api-key-status--configured' : 'aics-api-key-status--missing'; ?>"><?php echo esc_html( $image_status['message'] ); ?></p>
-				<p><?php esc_html_e( 'Featured images use the configured AI provider credentials. The API key is stored in the WordPress options table and is never displayed here.', 'ai-content-studio' ); ?></p>
-				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<input type="hidden" name="action" value="<?php echo esc_attr( self::SAVE_IMAGE_ACTION ); ?>">
-					<?php wp_nonce_field( self::SAVE_IMAGE_ACTION, 'aics_featured_image_settings_nonce' ); ?>
-					<table class="form-table" role="presentation">
-						<tr><th scope="row"><?php esc_html_e( 'Default image generation', 'ai-content-studio' ); ?></th><td><label><input type="checkbox" name="image_enabled" value="1" <?php checked( $image_settings['enabled'] ); ?>> <?php esc_html_e( 'Enable featured-image generation by default', 'ai-content-studio' ); ?></label><p class="description"><?php esc_html_e( 'These defaults are used by the image tests. Manual Studio and automation integration will be added in later tasks.', 'ai-content-studio' ); ?></p></td></tr>
-						<tr><th scope="row"><label for="aics-image-provider"><?php esc_html_e( 'Image provider', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-provider" name="image_provider"><?php foreach ( AICS_Image_Provider_Factory::provider_options() as $provider_key => $provider_name ) : ?><option value="<?php echo esc_attr( $provider_key ); ?>" <?php selected( $image_settings['provider'], $provider_key ); ?>><?php echo esc_html( $provider_name ); ?></option><?php endforeach; ?></select></td></tr>
-						<tr><th scope="row"><label for="aics-image-model"><?php esc_html_e( 'Image model', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-model" name="image_model"><?php foreach ( $image_capabilities['supported_models'] ?? array() as $image_model ) : ?><option value="<?php echo esc_attr( $image_model ); ?>" <?php selected( $image_settings['model'], $image_model ); ?>><?php echo esc_html( $image_model ); ?></option><?php endforeach; ?></select></td></tr>
-						<tr><th scope="row"><label for="aics-image-aspect-ratio"><?php esc_html_e( 'Default aspect ratio', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-aspect-ratio" name="image_aspect_ratio"><?php foreach ( array( 'landscape' => __( 'Landscape', 'ai-content-studio' ), 'square' => __( 'Square', 'ai-content-studio' ), 'portrait' => __( 'Portrait', 'ai-content-studio' ) ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['aspect_ratio'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
-						<tr><th scope="row"><label for="aics-image-quality"><?php esc_html_e( 'Default quality', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-quality" name="image_quality"><?php foreach ( array( 'standard' => __( 'Standard', 'ai-content-studio' ), 'high' => __( 'High', 'ai-content-studio' ) ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['quality'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
-						<tr><th scope="row"><label for="aics-image-output-format"><?php esc_html_e( 'Default output format', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-output-format" name="image_output_format"><?php foreach ( array( 'png' => 'PNG', 'jpeg' => 'JPEG', 'webp' => 'WebP' ) as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['output_format'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
-						<tr><th scope="row"><label for="aics-image-visual-style"><?php esc_html_e( 'Default visual style', 'ai-content-studio' ); ?></label></th><td><select id="aics-image-visual-style" name="image_visual_style"><?php foreach ( self::visual_style_labels() as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $image_settings['visual_style'], $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></td></tr>
-					</table>
-					<?php submit_button( __( 'Save Featured Image Settings', 'ai-content-studio' ) ); ?>
-				</form>
-				<div class="aics-connection-actions">
-					<h3><?php esc_html_e( 'Test Image Generation', 'ai-content-studio' ); ?></h3>
-					<p><?php esc_html_e( 'This sends one image-generation request using your saved image settings. The result is validated and immediately deleted. It is not added to the Media Library.', 'ai-content-studio' ); ?></p>
-					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-						<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_IMAGE_ACTION ); ?>">
-						<?php wp_nonce_field( self::TEST_IMAGE_ACTION, 'aics_test_image_nonce' ); ?>
-						<label for="aics-image-test-topic"><strong><?php esc_html_e( 'Test topic', 'ai-content-studio' ); ?></strong></label><br>
-						<input id="aics-image-test-topic" class="regular-text" type="text" name="image_test_topic" maxlength="250" value="<?php echo esc_attr__( 'Modern content strategy for small businesses', 'ai-content-studio' ); ?>">
-						<?php submit_button( __( 'Generate and Validate Test Image', 'ai-content-studio' ), 'secondary' ); ?>
-					</form>
-				</div>
-				<div class="aics-connection-actions">
-					<h3><?php esc_html_e( 'Test Media Library and Featured Image', 'ai-content-studio' ); ?></h3>
-					<p><?php esc_html_e( 'This test generates an image, adds it to the Media Library, and assigns it to the selected AI Content Studio draft. Use a disposable draft. Repeating the test must reuse the existing image rather than create a duplicate.', 'ai-content-studio' ); ?></p>
-					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-						<input type="hidden" name="action" value="<?php echo esc_attr( self::TEST_PIPELINE_ACTION ); ?>">
-						<?php wp_nonce_field( self::TEST_PIPELINE_ACTION, 'aics_test_pipeline_nonce' ); ?>
-						<label for="aics-pipeline-test-post"><strong><?php esc_html_e( 'Disposable AI Content Studio Draft Post ID', 'ai-content-studio' ); ?></strong></label><br>
-						<input id="aics-pipeline-test-post" class="small-text" type="number" min="1" step="1" name="pipeline_test_post_id" required>
-						<?php submit_button( __( 'Test Full Featured-Image Pipeline', 'ai-content-studio' ), 'secondary' ); ?>
-					</form>
 				</div>
 			</div>
 			</main></div>
