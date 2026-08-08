@@ -70,6 +70,11 @@ final class AICS_Automation_Profile_Service {
 		$mode = self::key( $input['mode'] ?? '' );
 		if ( ! in_array( $mode, array( 'autopilot', 'approval' ), true ) ) { $errors[] = 'invalid_mode'; $mode = 'autopilot'; }
 		$status = self::boolean( $input['enabled'] ?? false ) ? 'active' : 'disabled';
+		if ( 'active' === $status ) {
+			$existing = $this->repository->get_by_slug( self::SLUG );
+			$other_active = $this->repository->count_active_profiles() - ( is_array( $existing ) && 'active' === $existing['status'] ? 1 : 0 );
+			if ( $other_active >= AICS_Plan_Limits::max_active_automation_profiles() ) { $errors[] = 'plan_limit_active_automation_profiles'; }
+		}
 
 		$business = $this->business( is_array( $input['business_context'] ?? null ) ? $input['business_context'] : array(), $errors );
 		$content  = $this->content( is_array( $input['content_settings'] ?? null ) ? $input['content_settings'] : array(), $errors );
@@ -134,6 +139,8 @@ final class AICS_Automation_Profile_Service {
 		$lookback = self::strict_int( $input['duplicate_lookback_days'] ?? 180, 0, 3650 );
 		if ( null === $ideas || null === $selected || null === $lookback ) { $errors[] = 'invalid_content_settings'; }
 		$ideas = $ideas ?? 5; $selected = $selected ?? 1; $lookback = $lookback ?? 180;
+		if ( $ideas > AICS_Plan_Limits::max_ideas_per_cycle() ) { $errors[] = 'plan_limit_ideas_per_cycle'; $ideas = AICS_Plan_Limits::max_ideas_per_cycle(); }
+		if ( $selected > AICS_Plan_Limits::max_selected_ideas_per_cycle() ) { $errors[] = 'plan_limit_selected_ideas_per_cycle'; $selected = AICS_Plan_Limits::max_selected_ideas_per_cycle(); }
 		if ( $selected > $ideas ) { $errors[] = 'selected_ideas_exceed_generated'; }
 		$tone = self::key( $input['default_tone'] ?? 'professional' ); $length = self::key( $input['article_length'] ?? 'medium' );
 		if ( ! in_array( $tone, self::TONES, true ) || ! in_array( $length, array('short','medium','long'), true ) ) { $errors[] = 'invalid_content_settings'; }
@@ -142,19 +149,26 @@ final class AICS_Automation_Profile_Service {
 
 	private function schedule( array $input, array &$errors ): array {
 		$frequency = self::key( $input['frequency'] ?? 'weekly' );
+		$allowed = AICS_Plan_Limits::allowed_automation_frequencies();
 		$interval = self::strict_int( $input['interval'] ?? 1, 1, 31 ); $posts = self::strict_int( $input['posts_per_period'] ?? 1, 1, 31 ); $monthly = self::strict_int( $input['monthly_day'] ?? current_datetime()->format('j'), 1, 31 );
-		if ( ! in_array($frequency,array('daily','weekly','monthly'),true) || null===$interval || null===$posts ) { $errors[]='invalid_schedule_settings'; }
-		if ( 'monthly' === $frequency && null === $monthly ) { $errors[]='invalid_monthly_day'; }
-		$frequency=in_array($frequency,array('daily','weekly','monthly'),true)?$frequency:'weekly';
+		if ( null===$interval || null===$posts ) { $errors[]='invalid_schedule_settings'; }
+		if ( ! in_array( $frequency, $allowed, true ) ) { $errors[]='plan_limit_automation_frequency'; $frequency='weekly'; }
+		if ( null !== $interval && $interval < AICS_Plan_Limits::minimum_automation_interval() ) { $errors[]='plan_limit_automation_interval'; $interval=AICS_Plan_Limits::minimum_automation_interval(); }
+		if ( null !== $posts && $posts > AICS_Plan_Limits::max_posts_per_period() ) { $errors[]='plan_limit_posts_per_period'; $posts=AICS_Plan_Limits::max_posts_per_period(); }
 		$submitted=is_array($input['days_of_week']??null)?array_map(array(self::class,'key'),array_filter($input['days_of_week'],'is_scalar')):array(); $days=array_values(array_intersect(self::WEEKDAYS,$submitted));
 		if ('weekly'===$frequency && empty($days)) { $errors[]='weekly_days_required'; }
-		if ('weekly'!==$frequency) { $days=array(); }
 		$time=is_scalar($input['publish_time']??null)?(string)$input['publish_time']:''; if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)){ $errors[]='invalid_schedule_settings'; $time='10:00'; }
 		$start=self::date($input['start_date']??''); $end=self::date($input['end_date']??'');
 		$raw_start=is_scalar($input['start_date']??null)?(string)$input['start_date']:''; $raw_end=is_scalar($input['end_date']??null)?(string)$input['end_date']:'';
 		if ((''!==$raw_start && ''===$start) || (''!==$raw_end && ''===$end)) { $errors[]='invalid_schedule_settings'; }
 		if (''!==$start && ''!==$end && $end<$start) { $errors[]='end_date_before_start'; }
-		return array('frequency'=>$frequency,'interval'=>$interval??1,'days_of_week'=>$days,'publish_time'=>$time,'posts_per_period'=>$posts??1,'start_date'=>$start,'end_date'=>$end,'monthly_day'=>$monthly??1);
+		$schedule=array('frequency'=>$frequency,'interval'=>$interval??1,'days_of_week'=>$days,'publish_time'=>$time,'posts_per_period'=>$posts??1,'start_date'=>$start,'end_date'=>$end,'monthly_day'=>$monthly??1);
+		if ('weekly'!==$frequency) {
+			$extended=apply_filters('aics_validate_extended_automation_schedule',null,$schedule,$input);
+			if(!is_array($extended)||empty($extended['success'])||!is_array($extended['schedule']??null)){$errors[]='unsupported_extended_automation_schedule';$schedule['frequency']='weekly';}
+			else{$schedule=array_replace($schedule,array_intersect_key($extended['schedule'],$schedule));}
+		}
+		return $schedule;
 	}
 
 	private function rules( array $input, string $mode, array &$errors ): array {

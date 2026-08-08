@@ -1,5 +1,15 @@
 # AI Content Studio — AI Development Context
 
+The Automations wizard now reflects centralized Free plan limits while retaining Autopilot, approvals, images, and SEO.
+
+Free plan messaging now uses filterable plan labels and upgrade destinations, with one concise Automation notice and readable limit errors.
+
+Free automation limits are native plugin capabilities; neutral WordPress filters allow an external add-on to extend them without licensing or payment-unlock code in Free.
+
+Core validation and calculation now implement only the native weekly single-article schedule; added frequencies require explicit external capability, validation, calculation, and interval filters.
+
+Centralized Free plan limits now govern automation profile validation through filterable plan-limit getters.
+
 Automation Review step simplified and activation confirmation modal added.
 
 ## Manual SEO Rank Math and AIOSEO Reliability Fix (2026-08-06)
@@ -1300,6 +1310,10 @@ Next task: **Create Content Wizard Manual Acceptance and Usability Testing**. Do
 The SEO Apply button was dispatched twice: its generic click handler removed the form and sent an empty payload before the submit handler could send the reviewed fields. Apply now uses the form submit path, always saves and reanalyzes current reviewed metadata before applying, and successful persistence clears obsolete generation errors. Manual application treats the readiness threshold as guidance while retaining core metadata, deterministic blocker, application, and adapter checks. Provider-empty keywords fall back to the saved SEO keyword, the article-associated `_aics_primary_keyword`, the current article's selected idea, then its topic context. A failed regeneration preserves valid saved metadata with zero deterministic blockers instead of replacing its usable state with a generation failure.
 
 Changed files: `assets/js/manual-studio-wizard.js`, `includes/admin/class-manual-studio-wizard-controller.php`, `includes/services/class-manual-seo-service.php`, `includes/services/class-manual-seo-application-service.php`, and `includes/seo/class-seo-generation-service.php`.
+
+## Free automation runtime limits (2026-08-08)
+
+New scheduled runs use plan-capped automation values in their immutable snapshots, dispatch only the permitted active profiles, and defer legacy schedules until the plan's minimum interval has elapsed; stored profiles and historical runs remain unchanged.
 
 ## Article-aware featured-image prompts (2026-08-07)
 

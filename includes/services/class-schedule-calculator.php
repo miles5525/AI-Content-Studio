@@ -13,6 +13,11 @@ final class AICS_Schedule_Calculator {
 
 	/** Calculates the first eligible run strictly after a UTC reference. */
 	public function calculate_next_run( array $settings, $from_utc = null ): array {
+		$frequency = sanitize_key( (string) ( $settings['frequency'] ?? '' ) );
+		if ( 'weekly' !== $frequency ) {
+			$extended = apply_filters( 'aics_calculate_extended_automation_schedule', null, $settings, $from_utc );
+			return $this->extended_result( $extended );
+		}
 		$normalized = $this->normalize( $settings );
 		if ( ! $normalized['success'] ) { return $this->failure( $normalized['code'] ); }
 		$reference = $this->utc_reference( $from_utc );
@@ -24,13 +29,7 @@ final class AICS_Schedule_Calculator {
 		$start = '' === $s['start_date'] ? null : new DateTimeImmutable( $s['start_date'] . ' 00:00:00', $timezone );
 		$end = '' === $s['end_date'] ? null : new DateTimeImmutable( $s['end_date'] . ' 23:59:59', $timezone );
 
-		if ( 'daily' === $s['frequency'] ) {
-			$candidate = $this->daily( $s, $local_reference, $start, $end );
-		} elseif ( 'weekly' === $s['frequency'] ) {
-			$candidate = $this->weekly( $s, $local_reference, $start, $end );
-		} else {
-			$candidate = $this->monthly( $s, $local_reference, $start, $end );
-		}
+		$candidate = $this->weekly( $s, $local_reference, $start, $end );
 
 		if ( null === $candidate ) { return $this->failure( 'schedule_has_no_future_run' ); }
 		$utc = $candidate->setTimezone( new DateTimeZone( 'UTC' ) );
@@ -58,13 +57,6 @@ final class AICS_Schedule_Calculator {
 		return null===$utc?'':wp_date(get_option('date_format').' '.get_option('time_format'),$utc->getTimestamp(),wp_timezone());
 	}
 
-	private function daily(array $s,DateTimeImmutable $reference,?DateTimeImmutable $start,?DateTimeImmutable $end):?DateTimeImmutable{
-		$anchor=($start??$reference)->setTime(0,0); $candidate=$this->at_time($anchor,$s['publish_time']);
-		for($i=0;$i<5000;$i++,$candidate=$this->at_time($candidate->modify('+'.$s['interval'].' days'),$s['publish_time'])){
-			if($start&&$candidate<$start){continue;} if($end&&$candidate>$end){return null;} if($candidate>$reference){return $candidate;}
-		} return null;
-	}
-
 	private function weekly(array $s,DateTimeImmutable $reference,?DateTimeImmutable $start,?DateTimeImmutable $end):?DateTimeImmutable{
 		$anchor_date=$start??$reference; $anchor_week=$anchor_date->modify('monday this week')->setTime(0,0);
 		for($block=0;$block<1000;$block++){
@@ -73,29 +65,20 @@ final class AICS_Schedule_Calculator {
 		} return null;
 	}
 
-	private function monthly(array $s,DateTimeImmutable $reference,?DateTimeImmutable $start,?DateTimeImmutable $end):?DateTimeImmutable{
-		$anchor=($start??$reference)->modify('first day of this month')->setTime(0,0);
-		for($i=0;$i<500;$i++){
-			$month=$anchor->modify('+'.($i*$s['interval']).' months'); $day=min($s['monthly_day'],(int)$month->format('t'));
-			$candidate=$this->at_time($month->setDate((int)$month->format('Y'),(int)$month->format('m'),$day),$s['publish_time']);
-			if($start&&$candidate<$start){continue;} if($end&&$candidate>$end){return null;} if($candidate>$reference){return $candidate;}
-		} return null;
-	}
-
 	private function at_time(DateTimeImmutable $date,string $time):DateTimeImmutable{[$hour,$minute]=array_map('intval',explode(':',$time));return $date->setTime($hour,$minute,0);}
 	private function utc_reference($value):?DateTimeImmutable{if(null===$value){return current_datetime()->setTimezone(new DateTimeZone('UTC'));}return $this->strict_datetime($value,new DateTimeZone('UTC'));}
 	private function strict_datetime($value,DateTimeZone $timezone):?DateTimeImmutable{if(!is_scalar($value)){return null;}$value=(string)$value;$date=DateTimeImmutable::createFromFormat('!'.self::DATABASE_FORMAT,$value,$timezone);$errors=DateTimeImmutable::getLastErrors();return false!==$date&&(false===$errors||(0===$errors['warning_count']&&0===$errors['error_count']))&&$date->format(self::DATABASE_FORMAT)===$value?$date:null;}
 	private function strict_date($value):bool{if(''===$value){return true;}if(!is_scalar($value)){return false;}$date=DateTimeImmutable::createFromFormat('!Y-m-d',(string)$value,new DateTimeZone('UTC'));$errors=DateTimeImmutable::getLastErrors();return false!==$date&&(false===$errors||(0===$errors['warning_count']&&0===$errors['error_count']))&&$date->format('Y-m-d')===(string)$value;}
 	private function normalize(array $s):array{
-		$frequency=sanitize_key((string)($s['frequency']??'')); $interval=absint($s['interval']??0); $time=is_scalar($s['publish_time']??null)?(string)$s['publish_time']:''; $start=is_scalar($s['start_date']??null)?(string)$s['start_date']:''; $end=is_scalar($s['end_date']??null)?(string)$s['end_date']:''; $monthly=absint($s['monthly_day']??0);
-		if(!in_array($frequency,array('daily','weekly','monthly'),true)){return array('success'=>false,'code'=>'invalid_frequency');}
+		$frequency=sanitize_key((string)($s['frequency']??'')); $interval=absint($s['interval']??0); $time=is_scalar($s['publish_time']??null)?(string)$s['publish_time']:''; $start=is_scalar($s['start_date']??null)?(string)$s['start_date']:''; $end=is_scalar($s['end_date']??null)?(string)$s['end_date']:'';
+		if('weekly'!==$frequency){return array('success'=>false,'code'=>'unsupported_automation_frequency');}
 		if($interval<1||$interval>31){return array('success'=>false,'code'=>'invalid_interval');}
 		if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)){return array('success'=>false,'code'=>'invalid_publish_time');}
 		if(!$this->strict_date($start)||!$this->strict_date($end)||(''!==$start&&''!==$end&&$end<$start)){return array('success'=>false,'code'=>'invalid_schedule_date');}
 		$days=array_values(array_intersect(array_keys(self::WEEKDAYS),is_array($s['days_of_week']??null)?array_map('sanitize_key',array_filter($s['days_of_week'],'is_scalar')):array()));
 		if('weekly'===$frequency&&empty($days)){return array('success'=>false,'code'=>'weekly_days_required');}
-		if('monthly'===$frequency&&($monthly<1||$monthly>31)){return array('success'=>false,'code'=>'invalid_monthly_day');}
-		return array('success'=>true,'settings'=>array('frequency'=>$frequency,'interval'=>$interval,'days_of_week'=>$days,'publish_time'=>$time,'start_date'=>$start,'end_date'=>$end,'monthly_day'=>$monthly));
+		return array('success'=>true,'settings'=>array('frequency'=>$frequency,'interval'=>$interval,'days_of_week'=>$days,'publish_time'=>$time,'start_date'=>$start,'end_date'=>$end));
 	}
+	private function extended_result($result):array{if(!is_array($result)||empty($result['success'])||!is_string($result['next_run_utc']??null)){return $this->failure('unsupported_automation_frequency');}$utc=$this->strict_datetime($result['next_run_utc'],new DateTimeZone('UTC'));if(null===$utc){return $this->failure('invalid_extended_schedule_result');}$value=$utc->format(self::DATABASE_FORMAT);return array('success'=>true,'code'=>'next_run_calculated','next_run_utc'=>$value,'next_run_local'=>is_string($result['next_run_local']??null)?$result['next_run_local']:$value,'runs'=>array(array('utc'=>$value,'local'=>is_string($result['next_run_local']??null)?$result['next_run_local']:$value)));}
 	private function failure(string $code):array{return array('success'=>false,'code'=>$code,'next_run_utc'=>null,'next_run_local'=>null,'runs'=>array());}
 }

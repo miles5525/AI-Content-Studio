@@ -50,6 +50,21 @@ final class AICS_Automation_Dispatcher {
 				$result['code'] = 'due_profile_query_failed';
 				return $result;
 			}
+			$runtime_profiles = $profiles->get_profiles(
+				array(
+					'status'  => 'active',
+					'orderby' => 'id',
+					'order'   => 'ASC',
+					'limit'   => AICS_Plan_Limits::max_active_automation_profiles(),
+				)
+			);
+			$runtime_profile_ids = array_map( 'absint', wp_list_pluck( $runtime_profiles, 'id' ) );
+			$due = array_values(
+				array_filter(
+					$due,
+					static fn( array $profile ): bool => in_array( absint( $profile['id'] ?? 0 ), $runtime_profile_ids, true )
+				)
+			);
 			$result['due_profiles'] = count( $due );
 			$calculator             = new AICS_Schedule_Calculator();
 			$profile_service        = new AICS_Automation_Profile_Service( $profiles, $calculator );
@@ -66,15 +81,27 @@ final class AICS_Automation_Dispatcher {
 					continue;
 				}
 
-				$next        = $calculator->calculate_next_run( $fresh['schedule_settings'], $now );
+				$effective = AICS_Plan_Limits::apply_to_automation_profile( $fresh );
+				$effective['schedule_settings'] = $this->ensure_weekly_day( $effective['schedule_settings'], $fresh['next_run_at'] );
+				$minimum_reference = $this->minimum_reference( $fresh['last_run_at'] ?? null, $effective['schedule_settings'], $now );
+				if ( $minimum_reference > $now ) {
+					$deferred = $calculator->calculate_next_run( $effective['schedule_settings'], $this->one_second_before( $minimum_reference ) );
+					if ( $deferred['success'] ?? false ) {
+						$profiles->update_runtime_fields( $profile_id, array( 'next_run_at' => $deferred['next_run_utc'], 'updated_by' => 0 ) );
+					}
+					continue;
+				}
+
+				$next_reference = $this->minimum_reference( $now, $effective['schedule_settings'], $now );
+				$next        = $calculator->calculate_next_run( $effective['schedule_settings'], $this->one_second_before( $next_reference ) );
 				$no_future   = ! ( $next['success'] ?? false ) && 'schedule_has_no_future_run' === ( $next['code'] ?? '' );
 				if ( ! ( $next['success'] ?? false ) && ! $no_future ) {
 					++$result['profiles_failed'];
 					continue;
 				}
 
-				$validation_input            = $fresh;
-				$validation_input['enabled'] = 'active' === $fresh['status'];
+				$validation_input            = $effective;
+				$validation_input['enabled'] = false;
 				$validated                   = $profile_service->validate( $validation_input );
 				if ( empty( $validated['success'] ) ) {
 					if ( in_array( 'featured_image_configuration_invalid', $validated['errors'] ?? array(), true ) ) {
@@ -181,5 +208,35 @@ final class AICS_Automation_Dispatcher {
 
 	private function empty_result(): array {
 		return array( 'success' => false, 'code' => 'dispatch_not_started', 'due_profiles' => 0, 'runs_created' => 0, 'active_runs_skipped' => 0, 'profiles_failed' => 0, 'no_future_runs' => 0, 'expired_locks_requeued' => 0, 'expired_locks_failed' => 0 );
+	}
+
+	private function ensure_weekly_day( array $schedule, string $next_run_at ): array {
+		if ( 'weekly' !== ( $schedule['frequency'] ?? '' ) || ! empty( $schedule['days_of_week'] ) ) {
+			return $schedule;
+		}
+		$timestamp = strtotime( $next_run_at . ' UTC' );
+		$schedule['days_of_week'] = array( strtolower( wp_date( 'l', false === $timestamp ? time() : $timestamp, wp_timezone() ) ) );
+		return $schedule;
+	}
+
+	private function minimum_reference( $last_run_at, array $schedule, string $now ): string {
+		if ( ! is_string( $last_run_at ) || '' === $last_run_at ) {
+			return $now;
+		}
+		$last = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $last_run_at, new DateTimeZone( 'UTC' ) );
+		if ( false === $last ) {
+			return $now;
+		}
+		$interval = max( AICS_Plan_Limits::minimum_automation_interval(), absint( $schedule['interval'] ?? 1 ) );
+		$native_minimum = $last->modify( '+' . $interval . ' weeks' )->format( 'Y-m-d H:i:s' );
+		$filtered_minimum = apply_filters( 'aics_automation_minimum_next_run_utc', $native_minimum, $last_run_at, $schedule );
+		$minimum_date = is_scalar( $filtered_minimum ) ? DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', (string) $filtered_minimum, new DateTimeZone( 'UTC' ) ) : false;
+		$minimum = false === $minimum_date ? $native_minimum : $minimum_date->format( 'Y-m-d H:i:s' );
+		return $minimum > $now ? $minimum : $now;
+	}
+
+	private function one_second_before( string $utc ): string {
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $utc, new DateTimeZone( 'UTC' ) );
+		return false === $date ? $utc : $date->modify( '-1 second' )->format( 'Y-m-d H:i:s' );
 	}
 }

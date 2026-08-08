@@ -87,6 +87,7 @@ require_once AICS_PLUGIN_DIR . 'includes/services/class-featured-image-pipeline-
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-featured-image-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-usage-logger.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-schedule-calculator.php';
+require_once AICS_PLUGIN_DIR . 'includes/services/class-plan-limits.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-profile-service.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-dispatcher.php';
 require_once AICS_PLUGIN_DIR . 'includes/services/class-automation-idea-generator.php';
