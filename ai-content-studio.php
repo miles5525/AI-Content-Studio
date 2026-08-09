@@ -120,6 +120,7 @@ require_once AICS_PLUGIN_DIR . 'includes/core/class-activator.php';
 require_once AICS_PLUGIN_DIR . 'includes/core/class-deactivator.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-admin-menu.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-assets.php';
+require_once AICS_PLUGIN_DIR . 'includes/admin/class-run-status-banner.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-settings-page.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-settings-section-registry.php';
 require_once AICS_PLUGIN_DIR . 'includes/admin/class-content-studio-page.php';

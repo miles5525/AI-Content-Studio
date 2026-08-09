@@ -9,6 +9,7 @@ namespace AIContentStudio\Core;
 
 use AIContentStudio\Admin\Admin_Menu;
 use AIContentStudio\Admin\Assets;
+use AIContentStudio\Admin\Run_Status_Banner;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -57,6 +58,7 @@ final class Plugin {
 		if ( is_admin() ) {
 			( new Admin_Menu() )->register();
 			( new Assets() )->register();
+			( new Run_Status_Banner() )->register();
 			\AICS_Settings_Page::register();
 			\AICS_Setup_Wizard_Page::register();
 			\AICS_Content_Studio_Page::register();

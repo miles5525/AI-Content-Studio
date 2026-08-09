@@ -150,7 +150,8 @@ final class AICS_Automation_Profile_Repository {
 			return array();
 		}
 		$limit = max( 1, min( 100, absint( $limit ) ) );
-		$sql = $wpdb->prepare( "SELECT * FROM {$this->table()} WHERE status = %s AND next_run_at IS NOT NULL AND next_run_at <= %s ORDER BY next_run_at ASC, id ASC LIMIT %d", 'active', $now, $limit ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$cutoff = ( new DateTimeImmutable( $now, new DateTimeZone( 'UTC' ) ) )->modify( '+30 minutes' )->format( 'Y-m-d H:i:s' );
+		$sql = $wpdb->prepare( "SELECT * FROM {$this->table()} WHERE status = %s AND next_run_at IS NOT NULL AND next_run_at <= %s ORDER BY next_run_at ASC, id ASC LIMIT %d", 'active', $cutoff, $limit ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return array_values( array_filter( array_map( array( $this, 'profile' ), $wpdb->get_results( $sql, ARRAY_A ) ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	}
 

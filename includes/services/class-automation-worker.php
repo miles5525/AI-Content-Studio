@@ -3,6 +3,9 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class AICS_Automation_Worker {
+	private const MAX_STEPS_PER_INVOCATION = 12;
+	private const MAX_RUNS_PER_INVOCATION = 2;
+	private const DEFAULT_EXECUTION_BUDGET = 90;
 	private AICS_Automation_Run_Repository $runs;
 	private AICS_Automation_Profile_Repository $profiles;
 	private AICS_Content_Idea_Repository $ideas;
@@ -23,11 +26,45 @@ final class AICS_Automation_Worker {
 	}
 
 	public function process(): array {
-		$result = array( 'success'=>true,'code'=>'no_claimable_runs','runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0,'posts_created'=>0 );
+		$totals = array( 'success'=>true,'code'=>'no_claimable_runs','runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0,'posts_created'=>0 );
+		$started = microtime( true );
+		$maximum = absint( ini_get( 'max_execution_time' ) );
+		$budget  = 0 === $maximum ? self::DEFAULT_EXECUTION_BUDGET : max( 1, min( self::DEFAULT_EXECUTION_BUDGET, $maximum - 5 ) );
+		$run_id  = 0;
+		$run_ids = array();
+
+		for ( $step = 0; $step < self::MAX_STEPS_PER_INVOCATION && microtime( true ) - $started < $budget; ++$step ) {
+			$result = $this->process_one( $run_id );
+			foreach ( array( 'runs_checked','runs_claimed','ideas_created','duplicates','ideas_evaluated','articles_generated','posts_created' ) as $key ) {
+				$totals[ $key ] += absint( $result[ $key ] ?? 0 );
+			}
+			$totals['code'] = $result['code'];
+			if ( empty( $result['success'] ) ) { $totals['success'] = false; break; }
+			$processed_id = absint( $result['run_id'] ?? 0 );
+			if ( 0 === $processed_id ) { break; }
+			$run_ids[ $processed_id ] = true;
+			if ( ! empty( $result['defer_worker'] ) ) { break; }
+
+			$fresh = $this->runs->get_by_id( $processed_id );
+			if ( $fresh && 'queued' === $fresh['status'] && in_array( $fresh['current_step'], $this->claimable_steps(), true ) ) {
+				$run_id = $processed_id;
+				continue;
+			}
+
+			$run_id = 0;
+			if ( count( $run_ids ) >= self::MAX_RUNS_PER_INVOCATION ) { break; }
+		}
+
+		return $totals;
+	}
+
+	private function process_one( int $preferred_run_id = 0 ): array {
+		$result = array( 'success'=>true,'code'=>'no_claimable_runs','run_id'=>0,'defer_worker'=>false,'runs_checked'=>0,'runs_claimed'=>0,'ideas_created'=>0,'duplicates'=>0,'ideas_evaluated'=>0,'articles_generated'=>0,'posts_created'=>0 );
 		try {
-			$steps = array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article', 'create_post', 'generate_featured_image', 'generate_seo', 'apply_seo', 'schedule_post', 'publish_post', 'finalize' );
-			$candidates = $this->runs->get_claimable_runs( current_time( 'mysql', true ), $steps, 1 );
+			$steps = $this->claimable_steps();
+			$candidates = $preferred_run_id > 0 ? array_filter( array( $this->runs->get_by_id( $preferred_run_id ) ) ) : $this->runs->get_claimable_runs( current_time( 'mysql', true ), $steps, 1 );
 			if ( ! $candidates ) { return $result; }
+			$result['run_id'] = absint( $candidates[0]['id'] ?? 0 );
 			$result['runs_checked'] = 1; $ttl = in_array( $candidates[0]['current_step'], array( 'queue_idea', 'generate_article' ), true ) ? 1800 : ( in_array( $candidates[0]['current_step'], array( 'create_post', 'generate_featured_image', 'schedule_post', 'publish_post', 'finalize' ), true ) ? 600 : 900 );
 			$claim = $this->runs->claim_run( $candidates[0]['id'], $ttl );
 			if ( ! ( $claim['success'] ?? false ) ) { return $this->failed( $result, 'run_claim_failed' ); }
@@ -39,6 +76,11 @@ final class AICS_Automation_Worker {
 			$effective = $this->runs->get_effective_configuration( $run, $profile );
 			if ( empty( $effective['success'] ) ) { $this->runs->mark_failed( $run['id'], $token, $effective['code'] ); return $this->failed( $result, $effective['code'] ); }
 			$profile = array_merge( $profile, $effective['configuration'] );
+			$profile['publish_at'] = $this->runs->get_publish_at( $run );
+			if ( 'publish' === ( $profile['publishing_settings']['publishing_mode'] ?? '' ) && is_string( $profile['publish_at'] ) && $profile['publish_at'] > current_time( 'mysql', true ) ) {
+				$profile['publishing_settings']['publishing_mode'] = 'schedule';
+				$profile['publishing_settings']['post_status_after_generation'] = 'future';
+			}
 			if ( 'generate_featured_image' === $run['current_step'] ) { return $this->featured_image_step( $profile, $run, $token, $result ); }
 			if ( in_array( $run['current_step'], array( 'generate_seo','apply_seo' ), true ) ) { return $this->seo_step( $profile, $run, $token, $result ); }
 			if ( 'evaluate_ideas' === $run['current_step'] ) { return $this->evaluate_step( $profile, $run, $token, $result ); }
@@ -59,7 +101,7 @@ final class AICS_Automation_Worker {
 	private function featured_image_step(array $profile,array $run,string $token,array $result):array{
 		$processed=(new AICS_Automation_Featured_Image_Service($this->articles))->process_one($run,$profile);
 		if(empty($processed['success'])){return $this->handle_failure($run,$token,$processed,$result);}
-		if(empty($processed['complete'])){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$processed['code'];$result['images_processed']=1;return $result;}
+		if(empty($processed['complete'])){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$processed['code'];$result['images_processed']=1;$result['defer_worker']=true;return $result;}
 		$settings=is_array($profile['publishing_settings']??null)?$profile['publishing_settings']:array();$rules=is_array($profile['workflow_rules']??null)?$profile['workflow_rules']:array();$mode=$settings['publishing_mode']??'draft';$step=!empty($profile['seo_settings']['enabled'])?'generate_seo':('draft'===$mode?'finalize':(!empty($rules['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post')));
 		if(!($this->runs->update_step($run['id'],$token,$step)['success']??false)){return $this->failed($result,'run_step_update_failed');}if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']='featured_images_complete';return $result;
 	}
@@ -67,10 +109,10 @@ final class AICS_Automation_Worker {
 	private function seo_step(array $profile,array $run,string $token,array $result):array{$phase='generate_seo'===$run['current_step']?'generate':'apply';$processed=(new AICS_Automation_SEO_Service($this->articles))->process_one($run,$profile,$phase);if(empty($processed['success'])){return $this->handle_failure($run,$token,$processed,$result);}if(empty($processed['complete'])){$this->runs->release_lock($run['id'],$token);$result['code']=$processed['code'];return $result;}if('generate'===$phase){$next='apply_seo';}else{$mode=$profile['publishing_settings']['publishing_mode']??'draft';$next='draft'===$mode?'finalize':(!empty($profile['workflow_rules']['require_publish_approval'])?'waiting_publish_approval':('schedule'===$mode?'schedule_post':'publish_post'));}if(!($this->runs->update_step($run['id'],$token,$next)['success']??false)){return $this->failed($result,'run_step_update_failed');}$this->runs->release_lock($run['id'],$token);$result['code']=$processed['code'];return $result;}
 
 	private function delivery_step( array $profile, array $run, string $token, array $result ): array {
-		$mode=$profile['publishing_settings']['publishing_mode']??'';$expected='schedule_post'===$run['current_step']?'schedule':'publish';if($mode!==$expected){return $this->handle_failure($run,$token,array('code'=>'invalid_publishing_mode','retryable'=>false),$result);}
+		$mode=$profile['publishing_settings']['publishing_mode']??'';$expected='schedule_post'===$run['current_step']?'schedule':'publish';if($mode!==$expected&&!('schedule'===$mode&&'publish_post'===$run['current_step'])){return $this->handle_failure($run,$token,array('code'=>'invalid_publishing_mode','retryable'=>false),$result);}
 		$articles=$this->articles->get_articles_for_run($run['id'],array('profile_id'=>$profile['id'],'limit'=>100,'orderby'=>'created_at','order'=>'ASC'));usort($articles,static function($a,$b){if(null===$a['planned_publish_at']&&null!==$b['planned_publish_at']){return 1;}if(null!==$a['planned_publish_at']&&null===$b['planned_publish_at']){return -1;}return ($a['planned_publish_at']<=>$b['planned_publish_at'])?:($a['created_at']<=>$b['created_at'])?:($a['id']<=>$b['id']);});
 		if(!$articles){return $this->handle_failure($run,$token,array('code'=>'run_not_ready_to_finalize','retryable'=>false),$result);}$candidate=null;foreach($articles as $article){if('rejected'===$article['status']){continue;}if('draft_created'===$article['status']){$candidate=$article;break;}if(!in_array($article['status'],array('scheduled','published'),true)){return $this->delivery_failure($run,$token,array('code'=>'article_post_missing','retryable'=>false,'article_id'=>$article['id']),$result);}$owned=$this->delivery->validate_article_post_ownership($article);if(empty($owned['success'])){return $this->delivery_failure($run,$token,array('code'=>$owned['code'],'retryable'=>false,'article_id'=>$article['id']),$result);}if('scheduled'===$article['status']&&'publish'===$owned['post']->post_status){$candidate=$article;break;}if('scheduled'===$article['status']&&'future'!==$owned['post']->post_status){return $this->delivery_failure($run,$token,array('code'=>'invalid_wordpress_post_status','retryable'=>false,'article_id'=>$article['id']),$result);}if('published'===$article['status']&&'publish'!==$owned['post']->post_status){return $this->delivery_failure($run,$token,array('code'=>'invalid_wordpress_post_status','retryable'=>false,'article_id'=>$article['id']),$result);}}
-		if($candidate){$image_guard=(new AICS_Automation_Featured_Image_Service($this->articles))->delivery_allowed($candidate,is_array($profile['featured_image_settings']??null)?$profile['featured_image_settings']:array());if(empty($image_guard['success'])){return $this->delivery_failure($run,$token,array('code'=>$image_guard['code'],'retryable'=>false,'article_id'=>$candidate['id']),$result);}if('schedule'===$mode){$slot=$this->publishing_slot($profile,$articles,$candidate);if(!$slot){return $this->delivery_failure($run,$token,array('code'=>'no_future_publishing_slot','retryable'=>false,'article_id'=>$candidate['id']),$result);}$delivered=$this->delivery->schedule_article_post($candidate['id'],$slot);}else{$delivered=$this->delivery->publish_article_post($candidate['id']);}if(empty($delivered['success'])){return $this->delivery_failure($run,$token,$delivered,$result);}if($this->articles->count_articles(array('run_id'=>$run['id'],'profile_id'=>$profile['id'],'status'=>'draft_created'))>0){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$delivered['code'];return $result;}}
+		if($candidate){$image_guard=(new AICS_Automation_Featured_Image_Service($this->articles))->delivery_allowed($candidate,is_array($profile['featured_image_settings']??null)?$profile['featured_image_settings']:array());if(empty($image_guard['success'])){return $this->delivery_failure($run,$token,array('code'=>$image_guard['code'],'retryable'=>false,'article_id'=>$candidate['id']),$result);}$publish_at=$candidate['planned_publish_at']??($profile['publish_at']??null);if(is_string($publish_at)&&$publish_at>current_time('mysql',true)){$delivered=$this->delivery->schedule_article_post($candidate['id'],$publish_at);}elseif('schedule'===$mode){$slot=$this->publishing_slot($profile,$articles,$candidate);if(!$slot){return $this->delivery_failure($run,$token,array('code'=>'no_future_publishing_slot','retryable'=>false,'article_id'=>$candidate['id']),$result);}$delivered=$this->delivery->schedule_article_post($candidate['id'],$slot);}else{$delivered=$this->delivery->publish_article_post($candidate['id']);}if(empty($delivered['success'])){return $this->delivery_failure($run,$token,$delivered,$result);}if($this->articles->count_articles(array('run_id'=>$run['id'],'profile_id'=>$profile['id'],'status'=>'draft_created'))>0){if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']=$delivered['code'];return $result;}}
 		if(!($this->runs->refresh_lock($run['id'],$token,600)['success']??false)){return $this->failed($result,'execution_lock_lost');}if(!($this->runs->update_step($run['id'],$token,'finalize')['success']??false)){return $this->failed($result,'run_step_update_failed');}if(!($this->runs->release_lock($run['id'],$token)['success']??false)){return $this->failed($result,'execution_lock_lost');}$result['code']='delivery_completed';return $result;
 	}
 
@@ -152,5 +194,6 @@ final class AICS_Automation_Worker {
 	private function evaluate_step( array $profile, array $run, string $token, array $result ): array { $evaluated=$this->evaluator->evaluate($profile,$run['id']);$result['ideas_evaluated']=absint($evaluated['evaluated']??0);if(!($this->runs->refresh_lock($run['id'],$token,900)['success']??false)){return $this->failed($result,'execution_lock_lost');}if($evaluated['success']){$step=$evaluated['next_step'];if(!in_array($step,array('queue_idea','waiting_idea_approval'),true)||!($this->runs->update_step($run['id'],$token,$step)['success']??false)){return $this->failed($result,'run_step_update_failed');}$this->runs->release_lock($run['id'],$token);$result['code']=$evaluated['code'];return $result;}return $this->handle_failure($run,$token,$evaluated,$result); }
 	private function handle_article_failure( array $run, string $token, array $failure, array $result ): array { $article_id=absint($failure['article_id']??0);$code=sanitize_key($failure['code']??'article_generation_failed');$fresh=$this->runs->get_by_id($run['id']);$terminal=empty($failure['retryable'])||absint($fresh['attempt_count']??1)>=absint($fresh['max_attempts']??3);if($article_id){$article=$this->articles->get_by_id($article_id);if($terminal){if($article&&in_array($article['status'],array('queued','generating','needs_attention'),true)){$this->articles->transition_status($article_id,array($article['status']),'needs_attention',array('updated_by'=>0,'error_code'=>$code));}}elseif(!empty($failure['retryable'])){$prepared=$this->articles->prepare_generation_retry($article_id,$code,0);if(empty($prepared['success'])){$failure['code']='article_transition_failed';$failure['retryable']=false;}}else{$this->articles->update_error_code($article_id,$code,0);}}return $this->handle_failure($run,$token,$failure,$result); }
 	private function handle_failure( array $run, string $token, array $failure, array $result ): array { $result['success']=false;$result['code']=sanitize_key($failure['code']??'worker_step_failed');$fresh=$this->runs->get_by_id($run['id']);$attempt=absint($fresh['attempt_count']??1);$max=absint($fresh['max_attempts']??3);if(!empty($failure['retryable'])&&$attempt<$max){$minutes=array(1=>15,2=>60)[$attempt]??240;$retry=(new DateTimeImmutable('now',new DateTimeZone('UTC')))->modify('+'.$minutes.' minutes')->format('Y-m-d H:i:s');if(!($this->runs->schedule_retry($run['id'],$token,$result['code'],$retry)['success']??false)){$this->runs->mark_failed($run['id'],$token,'retry_scheduling_failed');$result['code']='retry_scheduling_failed';}return $result;}$this->runs->mark_failed($run['id'],$token,$result['code']);return $result; }
+	private function claimable_steps(): array { return array( 'pending', 'generate_ideas', 'evaluate_ideas', 'queue_idea', 'generate_article', 'create_post', 'generate_featured_image', 'generate_seo', 'apply_seo', 'schedule_post', 'publish_post', 'finalize' ); }
 	private function failed( array $result, string $code ): array { $result['success']=false;$result['code']=$code;return $result; }
 }

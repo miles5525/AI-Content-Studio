@@ -73,7 +73,7 @@ final class AICS_Schedule_Calculator {
 		$frequency=sanitize_key((string)($s['frequency']??'')); $interval=absint($s['interval']??0); $time=is_scalar($s['publish_time']??null)?(string)$s['publish_time']:''; $start=is_scalar($s['start_date']??null)?(string)$s['start_date']:''; $end=is_scalar($s['end_date']??null)?(string)$s['end_date']:'';
 		if('weekly'!==$frequency){return array('success'=>false,'code'=>'unsupported_automation_frequency');}
 		if($interval<1||$interval>31){return array('success'=>false,'code'=>'invalid_interval');}
-		if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)){return array('success'=>false,'code'=>'invalid_publish_time');}
+		if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5][05]$/',$time)){return array('success'=>false,'code'=>'invalid_publish_time');}
 		if(!$this->strict_date($start)||!$this->strict_date($end)||(''!==$start&&''!==$end&&$end<$start)){return array('success'=>false,'code'=>'invalid_schedule_date');}
 		$days=array_values(array_intersect(array_keys(self::WEEKDAYS),is_array($s['days_of_week']??null)?array_map('sanitize_key',array_filter($s['days_of_week'],'is_scalar')):array()));
 		if('weekly'===$frequency&&empty($days)){return array('success'=>false,'code'=>'weekly_days_required');}

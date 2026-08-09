@@ -20,6 +20,11 @@ final class AICS_Automation_Post_Creator {
 		if ( 'automation' !== $article['source_type'] || ! in_array( $article['status'], array( 'approved','draft_created','scheduled','published' ), true ) ) { return $this->result( false, 'article_not_ready', $id, 0, false, false ); }
 		$idea = $this->ideas->get_by_id( $article['idea_id'] );
 		if ( ! $idea || $idea['run_id'] !== $article['run_id'] || $idea['profile_id'] !== $article['profile_id'] ) { return $this->result( false, 'related_idea_not_found', $id, 0, false, false ); }
+		if ( empty( $article['planned_publish_at'] ) && ! empty( $profile['publish_at'] ) ) {
+			$saved = $this->articles->update_planned_publish_at( $id, $profile['publish_at'], 0 );
+			if ( empty( $saved['success'] ) ) { return $this->result( false, 'planned_publish_time_save_failed', $id, 0, false, true ); }
+			$article = $this->articles->get_by_id( $id );
+		}
 		$existing = $this->associated_post( $article );
 		if ( $existing > 0 ) {
 			if ( in_array( $article['status'], array( 'draft_created','scheduled','published' ), true ) ) { return $this->result( true, 'wordpress_post_already_exists', $id, $existing, false, false ); }
@@ -38,7 +43,7 @@ final class AICS_Automation_Post_Creator {
 		$category = absint( $settings['category_id'] ?? 0 );
 		$term = $category ? get_term( $category, 'category' ) : null;
 		if ( ! $term || is_wp_error( $term ) ) { $category = absint( get_option( 'default_category', 0 ) ); $term = $category ? get_term( $category, 'category' ) : null; if ( ! $term || is_wp_error( $term ) ) { $category = 0; } }
-		$metadata = array( '_aics_generated_post'=>1, '_aics_source'=>sanitize_text_field('automation'), '_aics_article_id'=>absint($id), '_aics_article_uuid'=>sanitize_text_field( $article['article_uuid'] ), '_aics_idea_id'=>absint($article['idea_id']), '_aics_run_id'=>absint($article['run_id']), '_aics_profile_id'=>absint($article['profile_id']) );
+		$metadata = array( '_aics_generated_post'=>1, '_aics_source'=>sanitize_text_field('automation'), '_aics_article_id'=>absint($id), '_aics_article_uuid'=>sanitize_text_field( $article['article_uuid'] ), '_aics_idea_id'=>absint($article['idea_id']), '_aics_run_id'=>absint($article['run_id']), '_aics_profile_id'=>absint($article['profile_id']), '_aics_publish_at'=>sanitize_text_field((string)($article['planned_publish_at']??'')) );
 		$started = microtime( true );
 		$created = $this->generator->create_draft_from_article( $article, array( 'author_id'=>$author, 'category_id'=>$category ), $metadata );
 		if ( empty( $created['success'] ) ) { $this->log( false, 'wordpress_post_creation_failed', 0, $started ); return $this->result( false, 'wordpress_post_creation_failed', $id, 0, false, true ); }

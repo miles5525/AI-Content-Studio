@@ -67,6 +67,18 @@ final class Assets {
 			true
 		);
 
+		wp_localize_script(
+			'aics-admin',
+			'aicsRunStatus',
+			array(
+				'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+				'action'       => 'aics_admin_run_status',
+				'nonce'        => wp_create_nonce( 'aics_admin_run_status' ),
+				'pollInterval' => 10000,
+				'showBanner'   => 'ai-content-studio_page_aics-create-content' !== $hook_suffix,
+			)
+		);
+
 		if ( 'ai-content-studio_page_aics-create-content' === $hook_suffix ) {
 			wp_enqueue_script(
 				'aics-manual-studio-wizard',

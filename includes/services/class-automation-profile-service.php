@@ -34,6 +34,7 @@ final class AICS_Automation_Profile_Service {
 
 		$existing = $this->repository->get_by_slug( self::SLUG );
 		$data     = $validated['data'];
+		$newly_activated = 'active' === $data['status'] && ( null === $existing || 'active' !== ( $existing['status'] ?? '' ) );
 		if ( null === $existing ) {
 			$data['profile_slug'] = self::SLUG;
 			$result = $this->repository->create( $data );
@@ -58,6 +59,9 @@ final class AICS_Automation_Profile_Service {
 		$runtime     = $this->repository->update_runtime_fields( $profile_id, array( 'next_run_at'=>$next_run, 'updated_by'=>get_current_user_id() ) );
 		if ( ! $runtime['success'] ) { return self::result( true, $profile_id, 'schedule_persistence_failed', array(), $data ); }
 		if ( ! $calculation['success'] ) { return self::result( true, $profile_id, $calculation['code'], array(), $data ); }
+		if ( $newly_activated && $next_run <= gmdate( 'Y-m-d H:i:s', time() + ( 30 * MINUTE_IN_SECONDS ) ) ) {
+			( new AICS_Automation_Dispatcher() )->dispatch();
+		}
 		return self::result( true, $profile_id, 'automation_saved_next_run', array(), $data );
 	}
 
@@ -156,8 +160,9 @@ final class AICS_Automation_Profile_Service {
 		if ( null !== $interval && $interval < AICS_Plan_Limits::minimum_automation_interval() ) { $errors[]='plan_limit_automation_interval'; $interval=AICS_Plan_Limits::minimum_automation_interval(); }
 		if ( null !== $posts && $posts > AICS_Plan_Limits::max_posts_per_period() ) { $errors[]='plan_limit_posts_per_period'; $posts=AICS_Plan_Limits::max_posts_per_period(); }
 		$submitted=is_array($input['days_of_week']??null)?array_map(array(self::class,'key'),array_filter($input['days_of_week'],'is_scalar')):array(); $days=array_values(array_intersect(self::WEEKDAYS,$submitted));
-		if ('weekly'===$frequency && empty($days)) { $errors[]='weekly_days_required'; }
-		$time=is_scalar($input['publish_time']??null)?(string)$input['publish_time']:''; if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)){ $errors[]='invalid_schedule_settings'; $time='10:00'; }
+		if ('weekly'===$frequency && (empty($days)||count($days)>AICS_Plan_Limits::max_weekly_publishing_days())) { $errors[]='weekly_days_required'; }
+		if ('weekly'===$frequency && AICS_Plan_Limits::max_weekly_publishing_days()>1 && 1===($interval??1) && count($days)>6) { $errors[]='weekly_all_days_daily'; }
+		$time=is_scalar($input['publish_time']??null)?(string)$input['publish_time']:''; if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5][05]$/',$time)){ $errors[]='invalid_schedule_settings'; $time='10:00'; }
 		$start=self::date($input['start_date']??''); $end=self::date($input['end_date']??'');
 		$raw_start=is_scalar($input['start_date']??null)?(string)$input['start_date']:''; $raw_end=is_scalar($input['end_date']??null)?(string)$input['end_date']:'';
 		if ((''!==$raw_start && ''===$start) || (''!==$raw_end && ''===$end)) { $errors[]='invalid_schedule_settings'; }

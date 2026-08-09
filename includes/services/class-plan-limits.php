@@ -38,6 +38,7 @@ final class AICS_Plan_Limits {
 			'max_ideas_per_cycle'            => 3,
 			'max_selected_ideas_per_cycle'   => 1,
 			'max_posts_per_period'            => 1,
+			'max_weekly_publishing_days'       => 1,
 			'allowed_automation_frequencies'  => array( 'weekly' ),
 			'minimum_automation_interval'     => 1,
 		);
@@ -49,6 +50,7 @@ final class AICS_Plan_Limits {
 			'max_ideas_per_cycle'            => max( 1, absint( $limits['max_ideas_per_cycle'] ) ),
 			'max_selected_ideas_per_cycle'   => max( 1, absint( $limits['max_selected_ideas_per_cycle'] ) ),
 			'max_posts_per_period'            => max( 1, absint( $limits['max_posts_per_period'] ) ),
+			'max_weekly_publishing_days'       => min( 7, max( 1, absint( $limits['max_weekly_publishing_days'] ) ) ),
 			'allowed_automation_frequencies'  => $frequencies ?: array( 'weekly' ),
 			'minimum_automation_interval'     => max( 1, absint( $limits['minimum_automation_interval'] ) ),
 		);
@@ -58,6 +60,7 @@ final class AICS_Plan_Limits {
 	public static function max_ideas_per_cycle(): int { return self::all()['max_ideas_per_cycle']; }
 	public static function max_selected_ideas_per_cycle(): int { return self::all()['max_selected_ideas_per_cycle']; }
 	public static function max_posts_per_period(): int { return self::all()['max_posts_per_period']; }
+	public static function max_weekly_publishing_days(): int { return self::all()['max_weekly_publishing_days']; }
 	public static function allowed_automation_frequencies(): array { return self::all()['allowed_automation_frequencies']; }
 	public static function minimum_automation_interval(): int { return self::all()['minimum_automation_interval']; }
 
@@ -86,6 +89,13 @@ final class AICS_Plan_Limits {
 		$schedule['posts_per_period'] = min(
 			max( 1, absint( $schedule['posts_per_period'] ?? 1 ) ),
 			self::max_posts_per_period()
+		);
+		$weekdays = array( 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday' );
+		$submitted_days = is_array( $schedule['days_of_week'] ?? null ) ? array_map( 'sanitize_key', array_filter( $schedule['days_of_week'], 'is_scalar' ) ) : array();
+		$schedule['days_of_week'] = array_slice( array_values( array_intersect( $weekdays, $submitted_days ) ), 0, self::max_weekly_publishing_days() );
+		$content['selected_ideas_per_cycle'] = min(
+			$content['selected_ideas_per_cycle'],
+			$schedule['posts_per_period']
 		);
 
 		$profile['content_settings']  = $content;

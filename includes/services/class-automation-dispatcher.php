@@ -50,6 +50,11 @@ final class AICS_Automation_Dispatcher {
 				$result['code'] = 'due_profile_query_failed';
 				return $result;
 			}
+			if ( ! $due ) {
+				$result['success'] = true;
+				$result['code']    = 'dispatch_completed';
+				return $result;
+			}
 			$runtime_profiles = $profiles->get_profiles(
 				array(
 					'status'  => 'active',
@@ -68,11 +73,12 @@ final class AICS_Automation_Dispatcher {
 			$result['due_profiles'] = count( $due );
 			$calculator             = new AICS_Schedule_Calculator();
 			$profile_service        = new AICS_Automation_Profile_Service( $profiles, $calculator );
+			$preparation_cutoff     = ( new DateTimeImmutable( $now, new DateTimeZone( 'UTC' ) ) )->modify( '+30 minutes' )->format( 'Y-m-d H:i:s' );
 
 			foreach ( $due as $profile ) {
 				$profile_id = absint( $profile['id'] ?? 0 );
 				$fresh      = $profiles->get_by_id( $profile_id );
-				if ( ! $fresh || 'active' !== $fresh['status'] || empty( $fresh['next_run_at'] ) || $fresh['next_run_at'] > $now ) {
+				if ( ! $fresh || 'active' !== $fresh['status'] || empty( $fresh['next_run_at'] ) || $fresh['next_run_at'] > $preparation_cutoff ) {
 					++$result['profiles_failed'];
 					continue;
 				}
@@ -83,19 +89,11 @@ final class AICS_Automation_Dispatcher {
 
 				$effective = AICS_Plan_Limits::apply_to_automation_profile( $fresh );
 				$effective['schedule_settings'] = $this->ensure_weekly_day( $effective['schedule_settings'], $fresh['next_run_at'] );
-				$minimum_reference = $this->minimum_reference( $fresh['last_run_at'] ?? null, $effective['schedule_settings'], $now );
-				if ( $minimum_reference > $now ) {
-					$deferred = $calculator->calculate_next_run( $effective['schedule_settings'], $this->one_second_before( $minimum_reference ) );
-					if ( $deferred['success'] ?? false ) {
-						$profiles->update_runtime_fields( $profile_id, array( 'next_run_at' => $deferred['next_run_utc'], 'updated_by' => 0 ) );
-					}
-					continue;
-				}
-
-				$next_reference = $this->minimum_reference( $now, $effective['schedule_settings'], $now );
+				$next_reference = $this->minimum_reference( $fresh['next_run_at'], $effective['schedule_settings'], $now );
 				$next        = $calculator->calculate_next_run( $effective['schedule_settings'], $this->one_second_before( $next_reference ) );
 				$no_future   = ! ( $next['success'] ?? false ) && 'schedule_has_no_future_run' === ( $next['code'] ?? '' );
 				if ( ! ( $next['success'] ?? false ) && ! $no_future ) {
+					$profiles->update_runtime_fields( $profile_id, array( 'last_error_code' => $next['code'] ?? 'next_run_calculation_failed', 'updated_by' => 0 ) );
 					++$result['profiles_failed'];
 					continue;
 				}
@@ -109,6 +107,7 @@ final class AICS_Automation_Dispatcher {
 						$result['code'] = 'featured_image_configuration_invalid';
 					} else {
 						$result['code'] = 'run_configuration_snapshot_failed';
+						$profiles->update_runtime_fields( $profile_id, array( 'last_error_code' => 'run_configuration_snapshot_failed', 'updated_by' => 0 ) );
 					}
 					++$result['profiles_failed'];
 					continue;
@@ -126,6 +125,7 @@ final class AICS_Automation_Dispatcher {
 				$seo=AICS_SEO_Configuration::normalize_stored($snapshot_content['seo']??array(),false);unset($snapshot_content['seo']);
 				$snapshot   = array(
 					'snapshot_version'    => 1,
+					'publish_at'          => $fresh['next_run_at'],
 					'mode'                => $normalized['mode'],
 					'business_context'    => $normalized['business_context'],
 					'content_settings'    => $snapshot_content,
@@ -137,6 +137,7 @@ final class AICS_Automation_Dispatcher {
 				);
 				$snapshot_json = wp_json_encode( $snapshot );
 				if ( ! is_string( $snapshot_json ) || '' === $snapshot_json ) {
+					$profiles->update_runtime_fields( $profile_id, array( 'last_error_code' => 'run_configuration_snapshot_failed', 'updated_by' => 0 ) );
 					++$result['profiles_failed'];
 					$result['code'] = 'run_configuration_snapshot_failed';
 					continue;
@@ -147,6 +148,7 @@ final class AICS_Automation_Dispatcher {
 					if ( 'active_run_exists' === ( $created['code'] ?? '' ) ) {
 						++$result['active_runs_skipped'];
 					} else {
+						$profiles->update_runtime_fields( $profile_id, array( 'last_error_code' => $created['code'] ?? 'run_creation_failed', 'updated_by' => 0 ) );
 						++$result['profiles_failed'];
 					}
 					continue;
