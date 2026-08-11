@@ -145,6 +145,11 @@ final class AICS_Automation_Dispatcher {
 
 				$created = $runs->create_run( $profile_id, array( 'trigger_type' => 'scheduled', 'configuration_snapshot' => $snapshot_json ) );
 				if ( ! ( $created['success'] ?? false ) ) {
+					if ( 'run_occurrence_exists' === ( $created['code'] ?? '' ) ) {
+						$advanced = $profiles->update_runtime_fields( $profile_id, array( 'next_run_at'=>$no_future?null:$next['next_run_utc'], 'last_error_code'=>'', 'updated_by'=>0 ) );
+						if ( $advanced['success'] ?? false ) { ++$result['active_runs_skipped']; } else { ++$result['profiles_failed']; }
+						continue;
+					}
 					if ( 'active_run_exists' === ( $created['code'] ?? '' ) ) {
 						++$result['active_runs_skipped'];
 					} else {
