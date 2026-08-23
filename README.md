@@ -2,6 +2,8 @@
 
 AI Content Studio generates, reviews, and manages AI-assisted WordPress content. It supports manual content creation, automation profiles and approvals, WordPress draft delivery, featured images, SEO metadata, operational history, and system diagnostics.
 
+Developed by [SamSiyu](https://samsiyu.com/). Visit the [AI Content Studio product page](https://samsiyu.com/ai-content-studio/) for product information.
+
 ## Requirements
 
 - WordPress 6.4 or newer

@@ -1,5 +1,4 @@
 === AI Content Studio ===
-Contributors: miles5525
 Tags: ai, content, automation, seo, images
 Requires at least: 6.4
 Tested up to: 7.0
@@ -13,6 +12,8 @@ Generate, review, and manage AI-assisted WordPress content with manual and autom
 == Description ==
 
 AI Content Studio provides manual content generation, configurable automation profiles, approval workflows, WordPress draft delivery, featured-image generation, SEO metadata, content history, and operational diagnostics.
+
+AI Content Studio is developed by SamSiyu. Learn more at https://samsiyu.com/ai-content-studio/.
 
 = External service =
 

@@ -1,12 +1,13 @@
 <?php
 /**
  * Plugin Name:       AI Content Studio
- * Plugin URI:        https://github.com/miles5525/AI-Content-Studio
+ * Plugin URI:        https://samsiyu.com/ai-content-studio/
  * Description:       Generate, review, and manage AI-assisted WordPress content.
  * Version:           0.9.1
  * Requires at least: 6.4
  * Requires PHP:      8.0
- * Author:            AI Content Studio
+ * Author:            SamSiyu
+ * Author URI:        https://samsiyu.com/
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       ai-content-studio

@@ -24,9 +24,9 @@ final class AICS_Plan_Limits {
 		return '' !== $label ? $label : $default;
 	}
 
-	/** Returns the reusable upgrade destination placeholder. */
+	/** Returns the reusable upgrade destination. */
 	public static function upgrade_url(): string {
-		$default = admin_url( 'admin.php?page=aics-settings&section=general' );
+		$default = 'https://samsiyu.com/ai-content-studio/';
 		$url = esc_url_raw( (string) apply_filters( 'aics_upgrade_url', $default, self::plan() ) );
 		return '' !== $url ? $url : $default;
 	}
