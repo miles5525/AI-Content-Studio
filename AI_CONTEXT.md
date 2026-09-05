@@ -1,5 +1,11 @@
 # AI Content Studio — AI Development Context
 
+## Provider markup normalization and featured-image deduplication (2026-09-06)
+
+Generated manual and automation articles now pass through conservative shared markup normalization in `AICS_Article_Content_Validator` before final `wp_kses` sanitization. Already-semantic HTML is preserved; Markdown headings, paragraphs, ordered/unordered lists, emphasis, and safe HTTP(S) links are converted into the existing theme-native HTML model. Provider H1 Markdown is downgraded to H2. Residual Markdown and long content without usable block structure fail through retryable validation instead of reaching `post_content`. Automation still enforces its immutable table switch.
+
+The duplicate featured image was produced by AICS, not solely by the theme: the featured-image assignment service called `set_post_thumbnail()`, then native SEO application inserted the same attachment into `post_content` as a proprietary Gutenberg block. New SEO applications now keep that attachment only as the native WordPress featured image and leave article body content unchanged. Existing posts are not migrated. No schema, UI, scheduling, approval, generation, or theme styling changes were added.
+
 ## Theme-native semantic article formatting (2026-09-06)
 
 Manual Studio and automation article prompts now require professionally structured, readable semantic HTML without an H1, repeated title, styling attributes, layout wrappers, theme-specific markup, or page-builder markup. Automation respects its existing FAQ, list, and table switches; Manual Studio retains its existing always-generated FAQ behavior and may use a semantic table sparingly when the information genuinely benefits from one.
