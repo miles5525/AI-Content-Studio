@@ -1,5 +1,11 @@
 # AI Content Studio — AI Development Context
 
+## Theme-native semantic article formatting (2026-09-06)
+
+Manual Studio and automation article prompts now require professionally structured, readable semantic HTML without an H1, repeated title, styling attributes, layout wrappers, theme-specific markup, or page-builder markup. Automation respects its existing FAQ, list, and table switches; Manual Studio retains its existing always-generated FAQ behavior and may use a semantic table sparingly when the information genuinely benefits from one.
+
+The shared article validator and the post generator now allow `table`, `caption`, `thead`, `tbody`, `tr`, `th`, and `td` without attributes. Automation also passes its immutable `allow_tables` value into validation, so a provider response containing table markup is rejected when that switch is off. Existing script, style, embedded-content, form, event-handler, dangerous-URL, SVG, wrapper-normalization, and sanitization protections remain in place. No frontend CSS, theme detection, or Gutenberg styling was added.
+
 The Automations wizard now reflects centralized Free plan limits while retaining Autopilot, approvals, images, and SEO.
 
 Free plan messaging now uses filterable plan labels and upgrade destinations, with one concise Automation notice and readable limit errors.

@@ -31,6 +31,13 @@ final class AICS_Post_Generator {
 			'href'  => true,
 			'title' => true,
 		),
+		'table'      => array(),
+		'caption'    => array(),
+		'thead'      => array(),
+		'tbody'      => array(),
+		'tr'         => array(),
+		'th'         => array(),
+		'td'         => array(),
 	);
 
 	/**
@@ -48,10 +55,12 @@ final class AICS_Post_Generator {
 	 * Strictly validates automation output before persistent storage.
 	 *
 	 * @param array<string,mixed> $article Generated structured data.
+	 * @param string              $requested_length Requested article length.
+	 * @param bool                $allow_tables Whether semantic tables are permitted.
 	 * @return array{title:string,content:string,excerpt:string}|WP_Error
 	 */
-	public function validate_and_prepare_article( array $article, string $requested_length = '' ) {
-		$result = ( new AICS_Article_Content_Validator() )->validate( $article, $requested_length );
+	public function validate_and_prepare_article( array $article, string $requested_length = '', bool $allow_tables = true ) {
+		$result = ( new AICS_Article_Content_Validator() )->validate( $article, $requested_length, $allow_tables );
 		return $result['success'] ? $result['article'] : new WP_Error( $result['code'], __( 'The generated article did not pass validation.', 'ai-content-studio' ), $result['diagnostics'] );
 	}
 

@@ -10,9 +10,10 @@ final class AICS_Article_Content_Validator {
 	private const ALLOWED_HTML = array(
 		'p'=>array(), 'h2'=>array(), 'h3'=>array(), 'h4'=>array(), 'ul'=>array(), 'ol'=>array(), 'li'=>array(),
 		'strong'=>array(), 'em'=>array(), 'blockquote'=>array(), 'a'=>array( 'href'=>true, 'title'=>true ),
+		'table'=>array(), 'caption'=>array(), 'thead'=>array(), 'tbody'=>array(), 'tr'=>array(), 'th'=>array(), 'td'=>array(),
 	);
 
-	public function validate( array $article, string $requested_length = '' ): array {
+	public function validate( array $article, string $requested_length = '', bool $allow_tables = true ): array {
 		foreach ( array( 'title', 'excerpt', 'content' ) as $field ) {
 			if ( ! array_key_exists( $field, $article ) ) { return $this->failure( 'missing_article_' . $field, 'structure' ); }
 			if ( ! is_string( $article[ $field ] ) ) { return $this->failure( 'invalid_article_field_type', 'structure' ); }
@@ -22,6 +23,7 @@ final class AICS_Article_Content_Validator {
 		if(''===$excerpt){return $this->failure('missing_article_excerpt','structure');}if($this->length($excerpt)>self::EXCERPT_MAX){return $this->failure('article_excerpt_too_long','structure');}
 		if(''===$raw){return $this->failure('missing_article_content','structure');}if($this->length($raw)>self::CONTENT_MAX){return $this->failure('article_content_too_long','structure');}
 		$danger=$this->dangerous_code($raw);if(null!==$danger){return $this->failure($danger,$this->category($danger));}
+		if ( ! $allow_tables && preg_match( '/<\s*\/?(?:table|caption|thead|tbody|tr|th|td)\b/i', $raw ) ) { return $this->failure( 'article_contains_disallowed_table', 'structure' ); }
 		if(preg_match('/^\s*[{\[]\s*"(?:article|title|content|excerpt)"\s*:/i',$raw)){return $this->failure('article_contains_raw_json_wrapper','structure');}
 		$wrappers=array();$normalized=$raw;
 		if(preg_match('/^\s*```(?:html)?\s*/i',$normalized)||preg_match('/\s*```\s*$/',$normalized)){$normalized=preg_replace('/^\s*```(?:html)?\s*/i','',$normalized)??$normalized;$normalized=preg_replace('/\s*```\s*$/','',$normalized)??$normalized;$wrappers[]='markdown_wrapper_removed';}
